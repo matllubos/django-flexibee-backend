@@ -36,5 +36,5 @@ class DatabaseWrapper(NonrelDatabaseWrapper):
         self.introspection = DatabaseIntrospection(self)
         # TODO: connect to your DB here (if needed)
         self.connector = Connector(
-            self.settings_dict['USER'], self.settings_dict['PASSWORD'],
-            self.settings_dict['COMPANY'])
+            self.settings_dict['USER'], self.settings_dict['PASSWORD'], self.settings_dict['HOSTNAME'],
+            self.settings_dict['PORT'], self.settings_dict['COMPANY'])

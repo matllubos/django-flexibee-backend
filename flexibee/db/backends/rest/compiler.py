@@ -14,6 +14,8 @@ from djangotoolbox.db.basecompiler import NonrelQuery, NonrelCompiler, \
     NonrelInsertCompiler, NonrelUpdateCompiler, NonrelDeleteCompiler
 from flexibee.db.backends.rest.connection import RestQuery
 from django.db.models.fields import Field
+from django.db.models.fields.related import RelatedField
+from django.db.models.sql.subqueries import UpdateQuery
 
 # TODO: Change this to match your DB
 # Valid query types (a dictionary is used for speedy lookups).
@@ -49,11 +51,19 @@ class BackendQuery(NonrelQuery):
         self.connector = self.connection.connector
         self.db_query = RestQuery(self.connection.connector, self.query.model._meta.db_table,
                                   [field.db_column or field.get_attname() for field in fields])
+        self.related_field_names = self._related_field_names()
 
     # This is needed for debugging
     def __repr__(self):
         # TODO: add some meaningful query string for debugging
         return '<BackendQuery: ...>'
+
+    def _related_field_names(self):
+        related_fields = []
+        for field in self.fields:
+            if isinstance(field, RelatedField):
+                related_fields.append(field.db_column or field.get_attname())
+        return related_fields
 
     @safe_call
     def fetch(self, low_mark=0, high_mark=None):
@@ -62,8 +72,10 @@ class BackendQuery(NonrelQuery):
         else:
             base = high_mark - low_mark
 
+
         for entity in self.db_query.fetch(low_mark, base):
-            entity[self.query.get_meta().pk.column] = entity['id']
+            for related_field in self.related_field_names:
+                entity[related_field] = entity['%s@ref' % related_field].split('/')[-1][:-5]
             yield entity
 
     @safe_call
@@ -72,8 +84,11 @@ class BackendQuery(NonrelQuery):
 
     @safe_call
     def delete(self):
-        # TODO: implement this
         self.db_query.delete()
+
+    @safe_call
+    def update(self, data):
+        self.db_query.update(data)
 
     @safe_call
     def order_by(self, ordering):
@@ -140,21 +155,26 @@ class SQLCompiler(NonrelCompiler):
 
 # This handles both inserts and updates of individual entities
 class SQLInsertCompiler(NonrelInsertCompiler, SQLCompiler):
+
     @safe_call
     def insert(self, data, return_id=False):
-        # TODO: implement this
-        pk_column = self.query.get_meta().pk.column
-        if pk_column in data:
-            data['id'] = data[pk_column]
-
-
         db_query = RestQuery(self.connection.connector, self.query.model._meta.db_table)
-        pk = db_query.save(data)
+        pk = db_query.insert(data)
         return pk
 
 
 class SQLUpdateCompiler(NonrelUpdateCompiler, SQLCompiler):
-    pass
+
+    @safe_call
+    def update(self, values):
+        db_values = {}
+
+        for field, value in values:
+            db_value = self.convert_value_for_db(field.get_internal_type(), value)
+            db_field = field.db_column or field.get_attname()
+            db_values[db_field] = db_value
+
+        query = self.build_query([self.query.model._meta.pk]).update(db_values)
 
 
 class SQLDeleteCompiler(NonrelDeleteCompiler, SQLCompiler):

@@ -1,18 +1,40 @@
 import requests
 import json
+import re
+
+from django.db.utils import DatabaseError
+from django.utils.encoding import force_text
 
 class Connector(object):
 
-    def __init__(self, username, password, hostname, company):
+    def __init__(self, username, password, hostname, port, company):
         self.username = username
         self.password = password
         self.hostname = hostname
         self.company = company
+        self.port = port
+
+
+class Filter(object):
+
+    def __init__(self, field, op, value, negated):
+        self.field = field
+        self.op = op
+        self.value = value
+        self.negated = negated
+
+    def __unicode__(self):
+        filter_list = []
+        if self.negated:
+            filter_list.append('not')
+
+        filter_list += [self.field, self.op, unicode(self.value)]
+        return ' '.join(filter_list)
 
 
 class RestQuery(object):
 
-    URL = 'https://creative-dock.flexibee.eu/c/%(company)s/%(table_name)s/(%(filter)s).json?%(query_string)s'
+    URL = 'https://%(hostname)s/c/%(company)s/%(table_name)s%(extra)s.json?%(query_string)s'
 
     def __init__(self, connector, table_name, fields=[]):
         self.table_name = table_name
@@ -21,6 +43,20 @@ class RestQuery(object):
         self.query_strings = {'detail': 'custom:%s' % ','.join(self.fields)}
         self.order_fields = []
         self.filters = []
+
+    def _is_request_for_one_object(self):
+        return len(self.filters) == 1 and self.filters[0].field == 'id' and self.filters[0].op == '=' \
+            and not self.filters[0].negated
+
+    def _extra_filter(self):
+        extra = ''
+        if self._is_request_for_one_object():
+            extra = '/%s' % self.filters[0].value
+        else:
+            filter_string = ' and '.join(['(%s)' % force_text(filter) for filter in self.filters])
+            if filter_string:
+                extra = '/(%s)' % filter_string
+        return extra
 
     def get(self, extra_query_strings={}):
         query_strings = self.query_strings.copy()
@@ -33,12 +69,12 @@ class RestQuery(object):
 
         query_strings = ['%s=%s' % (key, val) for key, val in query_strings_list]
 
-        filter_string = ' and '.join(['(%s)' % filter for filter in self.filters])
+        extra = self._extra_filter()
 
-        url = self.URL % {'company': self.connector.company, 'table_name': self.table_name,
-                          'query_string': '&'.join(query_strings), 'filter': filter_string}
+        url = self.URL % {'hostname': self.connector.hostname, 'port': self.connector.port,
+                          'company': self.connector.company, 'table_name': self.table_name,
+                          'query_string': '&'.join(query_strings), 'extra': extra}
 
-        print url
         r = requests.get(url, auth=(self.connector.username, self.connector.password))
         return r.json().get('winstrom')
 
@@ -56,35 +92,69 @@ class RestQuery(object):
         self.order_fields.append('%s@%s' % (field_name, is_asc and 'A' or 'D'))
 
     def add_filter(self, field_name, op, db_value, negated):
-        filter_list = []
-        if negated:
-            filter_list.append('not')
+        self.filters.append(Filter(field_name, op, db_value, negated))
 
-        filter_list += [field_name, op, unicode(db_value)]
-        self.filters.append(' '.join(filter_list))
+    def insert(self, data):
+        url = self.URL % {'hostname': self.connector.hostname, 'port': self.connector.port,
+                          'company': self.connector.company, 'table_name': self.table_name,
+                          'query_string': '', 'extra': ''}
 
-    def save(self, data):
-        url = 'https://%(hostname)s/c/%(company)s/%(table_name)s.json' % {'company': self.connector.company, 'table_name': self.table_name}
+        data = {'winstrom': {self.table_name: data}}
+        headers = {'Accept': 'application/json'}
 
-        print json.dumps(data)
-        print url
+        r = requests.put(url, data=json.dumps(data), headers=headers, auth=(self.connector.username, self.connector.password))
 
-        try:
-            headers = {'Content-type': 'application/json'}
+        if r.status_code == 200:
+            return r.json().get('winstrom').get('results')[0].get('id')
 
-            data = {'firma': 'code:nase_firma_s_r_o_', 'popis': 'test', 'sumZklZakl': 1000, 'bezPolozek': True}
+        else:
+            raise DatabaseError(r.json().get('winstrom').get('results')[0].get('errors')[0].get('message'))
 
+    def update(self, data):
 
+        if not self._is_request_for_one_object():
+            changes_data = data
+            data = []
+            query_strings = {'detail':'custom:id'}
+            for entity in self.get(query_strings).get(self.table_name):
+                entity_value = changes_data.copy()
+                entity_value['id'] = entity.get('id')
+                data.append(entity_value)
+            extra = ''
+        else:
+            extra = self._extra_filter()
 
-            data = "{'windstorm': {'faktura-vydana': {'typDokl': 'code:FAKTURA','firma': 'code:CREATIVDOCK','popis': 'Moje faktura z CURL', 'sumZklZakl': 1000, 'bezPolozek': true}}}}"
+        url = self.URL % {'hostname': self.connector.hostname, 'port': self.connector.port,
+                          'company': self.connector.company, 'table_name': self.table_name,
+                          'query_string': '', 'extra': extra}
+        data = {'winstrom': {self.table_name: data}}
+        headers = {'Accept': 'application/json'}
+        r = requests.put(url, data=json.dumps(data), headers=headers, auth=(self.connector.username,
+                                                                            self.connector.password))
+        if r.status_code == 201:
+            return r.json().get('winstrom').get('results')[0].get('id')
 
-            print data
-            r = requests.post(url, data=data, headers=headers, auth=(self.connector.username, self.connector.password))
+        else:
+            raise DatabaseError(r.json().get('winstrom').get('results')[0].get('errors')[0].get('message'))
 
+    def delete(self):
+        data = []
+        if not self._is_request_for_one_object():
+            query_strings = {'detail':'custom:id'}
+            for entity in self.get(query_strings).get(self.table_name):
+                data.append({'id': entity.get('id')})
+            extra = ''
+        else:
+            extra = self._extra_filter()
 
-            print 'ted uz ne'
-            print r
-            print r.json()
-        except Exception as ex:
-            print 'bug'
-            print ex
+        url = self.URL % {'hostname': self.connector.hostname, 'port': self.connector.port,
+                          'company': self.connector.company, 'table_name': self.table_name,
+                          'query_string': '', 'extra': extra}
+        data = {'winstrom': {self.table_name: data}}
+        headers = {'Accept': 'application/json'}
+        r = requests.delete(url, data=json.dumps(data), headers=headers, auth=(self.connector.username,
+                                                                            self.connector.password))
+
+        if r.status_code not in [200, 404]:
+            raise DatabaseError(r.json().get('winstrom').get('results')[0].get('errors')[0].get('message'))
+
