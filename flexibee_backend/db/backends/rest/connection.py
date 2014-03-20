@@ -1,9 +1,9 @@
 import requests
 import json
-import re
 
 from django.db.utils import DatabaseError
 from django.utils.encoding import force_text
+
 
 class Connector(object):
 

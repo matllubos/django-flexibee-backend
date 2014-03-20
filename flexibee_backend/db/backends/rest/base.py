@@ -3,7 +3,7 @@ from djangotoolbox.db.base import NonrelDatabaseFeatures, \
     NonrelDatabaseValidation, NonrelDatabaseIntrospection, \
     NonrelDatabaseCreation
 
-from flexibee.db.backends.rest.connection import Connector
+from .connection import Connector
 
 # TODO: You can either use the type mapping defined in NonrelDatabaseCreation
 # or you can override the mapping, here:
@@ -38,3 +38,5 @@ class DatabaseWrapper(NonrelDatabaseWrapper):
         self.connector = Connector(
             self.settings_dict['USER'], self.settings_dict['PASSWORD'], self.settings_dict['HOSTNAME'],
             self.settings_dict['PORT'], self.settings_dict['COMPANY'])
+
+print 'ok'

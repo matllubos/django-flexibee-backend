@@ -2,20 +2,22 @@ import datetime
 import sys
 import requests
 
+from functools import wraps
 
 from django.db.models.sql.constants import MULTI, SINGLE
 from django.db.models.sql.where import AND, OR
 from django.db.utils import DatabaseError, IntegrityError
 from django.utils.tree import Node
 
-from functools import wraps
-
-from djangotoolbox.db.basecompiler import NonrelQuery, NonrelCompiler, \
-    NonrelInsertCompiler, NonrelUpdateCompiler, NonrelDeleteCompiler
-from flexibee.db.backends.rest.connection import RestQuery
 from django.db.models.fields import Field
 from django.db.models.fields.related import RelatedField
 from django.db.models.sql.subqueries import UpdateQuery
+
+from djangotoolbox.db.basecompiler import NonrelQuery, NonrelCompiler, \
+    NonrelInsertCompiler, NonrelUpdateCompiler, NonrelDeleteCompiler
+
+from .connection import RestQuery
+
 
 # TODO: Change this to match your DB
 # Valid query types (a dictionary is used for speedy lookups).
