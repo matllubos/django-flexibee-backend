@@ -1,17 +1,17 @@
 from setuptools import setup, find_packages
 
-from flexibee.version import get_version
+from flexibee_backend.version import get_version
 
 setup(
-    name='django-flexibee',
+    name='django-flexibee-backend',
     version=get_version(),
     description="Flexibee rest ORM backend.",
     keywords='django, REST, DB backend',
     author='Lubos Matl',
     author_email='matllubos@gmail.com',
-    url='https://github.com/matllubos/django-flexibee',
+    url='https://github.com/matllubos/django-flexibee-backend',
     license='LGPL',
-    package_dir={'flexibee': 'flexibee'},
+    package_dir={'flexibee_backend': 'flexibee_backend'},
     include_package_data=True,
     packages=find_packages(),
     classifiers=[

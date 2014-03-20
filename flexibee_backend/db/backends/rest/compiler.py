@@ -51,19 +51,11 @@ class BackendQuery(NonrelQuery):
         self.connector = self.connection.connector
         self.db_query = RestQuery(self.connection.connector, self.query.model._meta.db_table,
                                   [field.db_column or field.get_attname() for field in fields])
-        self.related_field_names = self._related_field_names()
 
     # This is needed for debugging
     def __repr__(self):
         # TODO: add some meaningful query string for debugging
         return '<BackendQuery: ...>'
-
-    def _related_field_names(self):
-        related_fields = []
-        for field in self.fields:
-            if isinstance(field, RelatedField):
-                related_fields.append(field.db_column or field.get_attname())
-        return related_fields
 
     @safe_call
     def fetch(self, low_mark=0, high_mark=None):
@@ -72,10 +64,12 @@ class BackendQuery(NonrelQuery):
         else:
             base = high_mark - low_mark
 
-
         for entity in self.db_query.fetch(low_mark, base):
-            for related_field in self.related_field_names:
-                entity[related_field] = entity['%s@ref' % related_field].split('/')[-1][:-5]
+
+            for field in self.fields:
+                db_field_name = field.db_column or field.get_attname()
+                entity[db_field_name] = self.compiler.convert_value_from_db(field.get_internal_type(),
+                                                                            entity[db_field_name], db_field_name, entity)
             yield entity
 
     @safe_call
@@ -88,14 +82,13 @@ class BackendQuery(NonrelQuery):
 
     @safe_call
     def update(self, data):
-        self.db_query.update(data)
+        return self.db_query.update(data)
 
     @safe_call
     def order_by(self, ordering):
         if isinstance(ordering, (list, tuple)):
             for field, is_asc in ordering:
                 self.db_query.add_ordering(field.db_column or field.get_attname(), is_asc)
-
 
     # This function is used by the default add_filters() implementation which
     # only supports ANDed filter rules and simple negation handling for
@@ -121,18 +114,22 @@ class SQLCompiler(NonrelCompiler):
 
     # This gets called for each field type when you fetch() an entity.
     # db_type is the string that you used in the DatabaseCreation mapping
-    def convert_value_from_db(self, db_type, value):
-        # TODO: implement this
+    def convert_value_from_db(self, db_type, value, field, entity):
+        if db_type == 'ForeignKey':
+            if '%s@ref' % field in entity:
+                return entity['%s@ref' % field].split('/')[-1][:-5]
+            else:
+                return None
+        if db_type == 'FloatField':
+            return float(value)
+        if db_type == 'IntegerField':
+            return int(value)
 
-        # Handle list types
-        if isinstance(value, (list, tuple)) and len(value) and \
-                db_type.startswith('ListField:'):
-            db_sub_type = db_type.split(':', 1)[1]
-            value = [self.convert_value_from_db(db_sub_type, subvalue)
-                     for subvalue in value]
-        elif isinstance(value, str):
+        if isinstance(value, str):
+            print value
             # Always retrieve strings as unicode
             value = value.decode('utf-8')
+            print value
         return value
 
     # This gets called for each field type when you insert() an entity.
@@ -140,11 +137,9 @@ class SQLCompiler(NonrelCompiler):
     def convert_value_for_db(self, db_type, value):
         # TODO: implement this
 
-        if isinstance(value, unicode):
-            value = '\'%s\'' % unicode(value)
-        elif isinstance(value, str):
+        if isinstance(value, str):
             # Always store strings as unicode
-            value = value = '\'%s\'' % value.decode('utf-8')
+            value = value.decode('utf-8')
         elif isinstance(value, (list, tuple)) and len(value) and \
                 db_type.startswith('ListField:'):
             db_sub_type = db_type.split(':', 1)[1]
@@ -174,7 +169,7 @@ class SQLUpdateCompiler(NonrelUpdateCompiler, SQLCompiler):
             db_field = field.db_column or field.get_attname()
             db_values[db_field] = db_value
 
-        query = self.build_query([self.query.model._meta.pk]).update(db_values)
+        return self.build_query([self.query.model._meta.pk]).update(db_values)
 
 
 class SQLDeleteCompiler(NonrelDeleteCompiler, SQLCompiler):

@@ -75,6 +75,7 @@ class RestQuery(object):
                           'company': self.connector.company, 'table_name': self.table_name,
                           'query_string': '&'.join(query_strings), 'extra': extra}
 
+        print url
         r = requests.get(url, auth=(self.connector.username, self.connector.password))
         return r.json().get('winstrom')
 
@@ -83,9 +84,7 @@ class RestQuery(object):
         return self.get(query_strings).get('@rowCount')
 
     def fetch(self, offset, base):
-        query_strings = {'start':offset}
-        if base != None:
-            query_strings['limit'] = base
+        query_strings = {'start':offset, 'limit': base or 0}
         return self.get(query_strings).get(self.table_name)
 
     def add_ordering(self, field_name, is_asc):
@@ -132,10 +131,9 @@ class RestQuery(object):
         r = requests.put(url, data=json.dumps(data), headers=headers, auth=(self.connector.username,
                                                                             self.connector.password))
         if r.status_code == 201:
-            return r.json().get('winstrom').get('results')[0].get('id')
-
+            return int(r.json().get('winstrom').get('stats').get('updated'))
         else:
-            raise DatabaseError(r.json().get('winstrom').get('results')[0].get('errors')[0].get('message'))
+            raise DatabaseError(r.json().get('winstrom').get('results')[0].get('errors'))
 
     def delete(self):
         data = []
@@ -156,5 +154,5 @@ class RestQuery(object):
                                                                             self.connector.password))
 
         if r.status_code not in [200, 404]:
-            raise DatabaseError(r.json().get('winstrom').get('results')[0].get('errors')[0].get('message'))
+            raise DatabaseError(r.json().get('winstrom').get('results')[0].get('errors'))
 
