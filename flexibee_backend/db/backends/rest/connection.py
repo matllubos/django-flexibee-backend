@@ -41,7 +41,7 @@ class Connector(object):
                 extra = '/(%s)' % filter_string
         return extra
 
-    def _get_query_string(self, fields, relations, ordering):
+    def _get_query_string(self, fields, relations, ordering, offset, base):
         query_string_list = [
                              ('detail', 'custom:%s' % ','.join(fields)),
         ]
@@ -50,19 +50,24 @@ class Connector(object):
 
         for field in ordering:
             query_string_list.append(('order', field))
+
+        query_string_list.append(('start', offset))
+        query_string_list.append(('limit', base))
+        query_string_list.append(('add-row-count', 'true'))
+
         return '&'.join(['%s=%s' % (key, val) for key, val in query_string_list])
 
-    def _generate_key(self, filters, fields, relations, ordering):
+    def _generate_key(self, filters, fields, relations, ordering, offset, base):
         filters_key = ','.join([unicode(filter) for filter in filters])
         fields_key = ','.join(fields)
         relations_key = ','.join(relations)
         ordering_key = ','.join(ordering)
-        return '__'.join((filters_key, fields_key, relations_key, ordering_key))
+        return '__'.join((filters_key, fields_key, relations_key, ordering_key, str(offset), str(base)))
 
-    def _get_from_cache(self, table_name, filters, fields, relations, ordering):
+    def _get_from_cache(self, table_name, filters, fields, relations, ordering, offset, base):
         if table_name in self.cache:
             table_cache = self.cache.get(table_name)
-            key = self._generate_key(filters, fields, relations, ordering)
+            key = self._generate_key(filters, fields, relations, ordering, offset, base)
             if key in table_cache:
                 return table_cache.get(key)
 
@@ -70,12 +75,12 @@ class Connector(object):
         if table_name in self.cache:
             del self.cache[table_name]
 
-    def _add_to_cache(self, table_name, filters, fields, relations, ordering, data):
+    def _add_to_cache(self, table_name, filters, fields, relations, ordering, offset, base, data):
         table_cache = self.cache[table_name] = self.cache.get(table_name, {})
-        key = self._generate_key(filters, fields, relations, ordering)
+        key = self._generate_key(filters, fields, relations, ordering, offset, base)
         table_cache[key] = data
 
-    def read(self, table_name, filters, fields, relations, ordering):
+    def read(self, table_name, filters, fields, relations, ordering, offset, base):
         filters = list(filters)
         fields = list(fields)
         relations = list(relations)
@@ -86,18 +91,17 @@ class Connector(object):
         ordering.sort()
         relations.sort()
 
-        data = self._get_from_cache(table_name, filters, fields, relations, ordering)
+        data = self._get_from_cache(table_name, filters, fields, relations, ordering, offset, base)
         if data:
             return data
 
         extra = self._get_extra_filter(filters)
         url = self.URL % {'hostname': self.hostname, 'port': self.port, 'company': self.company, 'table_name': table_name,
-                          'query_string': self._get_query_string(fields, relations, ordering), 'extra': extra}
+                          'query_string': self._get_query_string(fields, relations, ordering, offset, base), 'extra': extra}
 
-        print url
         r = requests.get(url, auth=(self.username, self.password))
         data = r.json().get('winstrom')
-        self._add_to_cache(table_name, filters, fields, relations, ordering, data)
+        self._add_to_cache(table_name, filters, fields, relations, ordering, offset, base, data)
         return data
 
     def write(self, table_name, data):
@@ -111,10 +115,8 @@ class Connector(object):
 
         if r.status_code in [200, 201]:
             self._clear_table_cache(table_name)
-            print r.json().get('winstrom')
             return True, r.json().get('winstrom')
         else:
-            print r.json().get('winstrom')
             raise False, r.json().get('winstrom')
 
     def delete(self, table_name, data):
@@ -126,6 +128,7 @@ class Connector(object):
         r = requests.delete(url, data=json.dumps(data), headers=headers, auth=(self.username,
                                                                             self.password))
 
+        self._clear_table_cache(table_name)
         if r.status_code not in [200, 404]:
             raise DatabaseError(r.json().get('winstrom').get('results')[0].get('errors'))
 
@@ -185,21 +188,17 @@ class RestQuery(object):
                 extra = '/(%s)' % filter_string
         return extra
 
-    def get(self, extra_fields=[]):
+    def get(self, offset=0, base=0, extra_fields=[]):
         fields = list(self.fields)
         fields += extra_fields
-        return self.connector.read(self.table_name, self.filters, fields, self.relations, self.order_fields)
+        return self.connector.read(self.table_name, self.filters, fields, self.relations, self.order_fields, offset, base)
 
     def count(self):
-        query_strings = {'add-row-count':'true', 'detail':'custom:id'}
-
-        if self.connector._is_request_for_one_object(self.filters):
-            return len(self.get(query_strings).get(self.table_name))
-        return self.get(query_strings).get('@rowCount')
+        return self.connector.read(self.table_name, self.filters, ['id'], self.relations, self.order_fields, 0, 0)\
+            .get('@rowCount')
 
     def fetch(self, offset, base):
-        # query_strings = {'start':offset, 'limit': base or 0}
-        return self.get().get(self.table_name)
+        return self.get(offset, base or 0).get(self.table_name)
 
     def add_ordering(self, field_name, is_asc):
         self.order_fields.append('%s@%s' % (field_name, is_asc and 'A' or 'D'))
