@@ -12,6 +12,7 @@ from django.utils.tree import Node
 from django.db.models.fields import Field
 from django.db.models.fields.related import RelatedField
 from django.db.models.sql.subqueries import UpdateQuery
+from django.db.models.sql import aggregates as sqlaggregates
 
 from djangotoolbox.db.basecompiler import NonrelQuery, NonrelCompiler, \
     NonrelInsertCompiler, NonrelUpdateCompiler, NonrelDeleteCompiler, EmptyResultSet
@@ -23,6 +24,7 @@ from .connection import RestQuery
 from django.utils.timezone import get_current_timezone
 from django.utils import timezone
 from django.conf import settings
+from flexibee_backend.db.models import StoreViaForeignKey
 
 
 # TODO: Change this to match your DB
@@ -33,7 +35,7 @@ OPERATORS_MAP = {
     'gte': '>=',
     'lt': '<',
     'lte': '<=',
-    'in': 'in',
+    'in': lambda lookup_type, values: ('in', '(%s)' % ','.join([str(value) for value in values])),
     'isnull': 'is null',
     'like': 'like',
     'startswith': 'begins',
@@ -41,19 +43,28 @@ OPERATORS_MAP = {
 }
 
 
-
 class BackendQuery(NonrelQuery):
 
     def __init__(self, compiler, fields):
         super(BackendQuery, self).__init__(compiler, fields)
         self.connector = self.connection.connector
+        store_via_field = self._get_store_via()
+
+        query_kwargs = {}
+
+        if store_via_field:
+            query_kwargs = {
+                'via_table_name': store_via_field.rel.to._meta.db_table,
+                'via_relation_name': store_via_field.db_relation_name,
+                'via_fk_name': store_via_field.db_column or store_via_field.get_attname()
+            }
+
         self.db_query = RestQuery(self.connection.connector, self.query.model._meta.db_table,
-                                  [field.db_column or field.get_attname() for field in fields])
+                                  [field.db_column or field.get_attname() for field in fields], **query_kwargs)
 
     # This is needed for debugging
     def __repr__(self):
-        # TODO: add some meaningful query string for debugging
-        return '<BackendQuery: ...>'
+        return '<FlexibeeQuery>'
 
     def fetch(self, low_mark=0, high_mark=None):
 
@@ -74,11 +85,22 @@ class BackendQuery(NonrelQuery):
                                                                             entity)
             yield entity
 
+    def _get_store_via(self):
+        for field in self.query.model._meta.fields:
+            if isinstance(field, StoreViaForeignKey):
+                return field
+
     def count(self, limit=None):
         return self.db_query.count()
 
     def delete(self):
+        print 'ted delete'
+        print self._get_store_via()
+        print self.fields
         self.db_query.delete()
+
+    def insert(self, data):
+        return self.db_query.insert(data)
 
     def update(self, data):
         return self.db_query.update(data)
@@ -93,9 +115,6 @@ class BackendQuery(NonrelQuery):
     # transforming OR filters to AND filters:
     # NOT (a OR b) => (NOT a) AND (NOT b)
     def add_filter(self, field, lookup_type, negated, value):
-        print 'filter'
-        print field
-
         try:
             op = OPERATORS_MAP[lookup_type]
         except KeyError:
@@ -115,7 +134,7 @@ class SQLCompiler(NonrelCompiler):
     # This gets called for each field type when you fetch() an entity.
     # db_type is the string that you used in the DatabaseCreation mapping
     def convert_value_from_db(self, db_type, value, field, entity):
-        if db_type == 'ForeignKey':
+        if db_type in ['ForeignKey', 'StoreViaForeignKey']:
             if '%s@ref' % field in entity:
                 return entity['%s@ref' % field].split('/')[-1][:-5]
             else:
@@ -135,6 +154,9 @@ class SQLCompiler(NonrelCompiler):
     # This gets called for each field type when you insert() an entity.
     # db_type is the string that you used in the DatabaseCreation mapping
     def convert_value_for_db(self, db_type, value):
+        if value is None:
+            return value
+
         if db_type == 'DateField':
             tz = value.strftime('%z') or '+0000'
             value = '%s%s' % (value.strftime('%Y-%m-%d'), '%s:%s' % (tz[:3], tz[3:]))
@@ -150,20 +172,63 @@ class SQLCompiler(NonrelCompiler):
                      for subvalue in value]
         return value
 
+    def execute_sql(self, result_type=MULTI):
+        """
+        Handles SQL-like aggregate queries. This class only emulates COUNT
+        by using abstract NonrelQuery.count method.
+        """
+        aggregates = self.query.aggregate_select.values()
+
+        # Simulate a count().
+        if aggregates:
+            assert len(aggregates) == 1
+            aggregate = aggregates[0]
+            assert isinstance(aggregate, sqlaggregates.Count)
+            opts = self.query.get_meta()
+            if aggregate.col != '*' and \
+                aggregate.col != (opts.db_table, opts.pk.column):
+                raise DatabaseError("This database backend only supports "
+                                    "count() queries on the primary key.")
+
+            count = self.get_count()
+            if result_type is SINGLE:
+                return [count]
+            elif result_type is MULTI:
+                return [[count]]
+
+        # Exists
+        if self.query.extra == {'a': (u'1', [])}:
+            return self.has_results()
+
+
+        raise NotImplementedError("The database backend only supports "
+                                  "count() queries.")
+
+    def check_query(self):
+        """
+        Checks if the current query is supported by the database.
+
+        In general, we expect queries requiring JOINs (many-to-many
+        relations, abstract model bases, or model spanning filtering),
+        using DISTINCT (through `QuerySet.distinct()`, which is not
+        required in most situations) or using the SQL-specific
+        `QuerySet.extra()` to not work with nonrel back-ends.
+        """
+        if hasattr(self.query, 'is_empty') and self.query.is_empty():
+            raise EmptyResultSet()
+        if (len([a for a in self.query.alias_map if
+                 self.query.alias_refcount[a]]) > 1 or
+            self.query.distinct or (self.query.extra and self.query.extra != {'a': (u'1', [])}) or self.query.having):
+            raise DatabaseError("This query is not supported by the database.")
+
 
 # This handles both inserts and updates of individual entities
 class SQLInsertCompiler(NonrelInsertCompiler, SQLCompiler):
 
     def insert(self, data, return_id=False):
-        db_query = RestQuery(self.connection.connector, self.query.model._meta.db_table)
-
-        print 'insert data!!!!'
-        pk = db_query.insert(data)
-        return pk
-
+        return self.build_query().insert(data)
 
     def execute_sql(self, return_id=False):
-        print 'execute'
         to_insert = []
         pk_field = self.query.get_meta().pk
         for obj in self.query.objs:
@@ -181,13 +246,15 @@ class SQLInsertCompiler(NonrelInsertCompiler, SQLCompiler):
                 # already passed through get_db_prep_save.
                 value = self.ops.value_for_db(value, field)
                 db_value = self.convert_value_for_db(field.get_internal_type(), value)
-                field_values[field.column] = db_value
+                if db_value is not None:
+                    field_values[field.column] = db_value
             to_insert.append(field_values)
 
         key = self.insert(to_insert, return_id=return_id)
 
         # Pass the key value through normal database deconversion.
         return self.ops.convert_values(self.ops.value_from_db(key, pk_field), pk_field)
+
 
 class SQLUpdateCompiler(NonrelUpdateCompiler, SQLCompiler):
 
@@ -197,10 +264,11 @@ class SQLUpdateCompiler(NonrelUpdateCompiler, SQLCompiler):
         for field, value in values:
             db_value = self.convert_value_for_db(field.get_internal_type(), value)
             db_field = field.db_column or field.get_attname()
-            db_values[db_field] = db_value
+            if db_value is not None:
+                db_values[field.column] = db_value
 
-        return self.build_query([self.query.model._meta.pk]).update(db_values)
-
+        return self.build_query().update(db_values)
 
 class SQLDeleteCompiler(NonrelDeleteCompiler, SQLCompiler):
     pass
+
