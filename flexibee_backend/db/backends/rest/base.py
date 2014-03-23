@@ -5,6 +5,8 @@ from djangotoolbox.db.base import NonrelDatabaseFeatures, \
 
 from .connection import Connector
 
+import thread
+
 # TODO: You can either use the type mapping defined in NonrelDatabaseCreation
 # or you can override the mapping, here:
 class DatabaseCreation(NonrelDatabaseCreation):
@@ -34,9 +36,24 @@ class DatabaseWrapper(NonrelDatabaseWrapper):
         self.creation = DatabaseCreation(self)
         self.validation = DatabaseValidation(self)
         self.introspection = DatabaseIntrospection(self)
-        # TODO: connect to your DB here (if needed)
         self.connector = Connector(
             self.settings_dict['USER'], self.settings_dict['PASSWORD'], self.settings_dict['HOSTNAME'],
             self.settings_dict['PORT'], self.settings_dict['COMPANY'])
 
-print 'ok'
+    def _commit(self):
+        print 'commit'
+        if self.connection is not None:
+            with self.wrap_database_errors:
+                return self.connection.commit()
+
+    def _rollback(self):
+        print 'rollback'
+        if self.connection is not None:
+            with self.wrap_database_errors:
+                return self.connection.rollback()
+
+    def _close(self):
+        print 'close'
+        if self.connection is not None:
+            with self.wrap_database_errors:
+                return self.connection.close()
