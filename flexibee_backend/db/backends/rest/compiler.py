@@ -1,30 +1,18 @@
-import datetime
-import sys
-import requests
-
 from functools import wraps
 
 from django.db.models.sql.constants import MULTI, SINGLE
-from django.db.models.sql.where import AND, OR
 from django.db.utils import DatabaseError, IntegrityError
-from django.utils.tree import Node
 
-from django.db.models.fields import Field
-from django.db.models.fields.related import RelatedField
-from django.db.models.sql.subqueries import UpdateQuery
 from django.db.models.sql import aggregates as sqlaggregates
 
 from djangotoolbox.db.basecompiler import NonrelQuery, NonrelCompiler, \
     NonrelInsertCompiler, NonrelUpdateCompiler, NonrelDeleteCompiler, EmptyResultSet
 
 from dateutil.parser import parse
-from dateutil.parser import DEFAULTPARSER
 
 from .connection import RestQuery
-from django.utils.timezone import get_current_timezone
-from django.utils import timezone
-from django.conf import settings
-from flexibee_backend.db.models import StoreViaForeignKey
+
+from flexibee_backend.db.models import StoreViaForeignKey, CompanyForeignKey
 
 
 # TODO: Change this to match your DB
@@ -43,6 +31,10 @@ OPERATORS_MAP = {
 }
 
 
+def get_field_db_name(field):
+    return field.db_column or field.get_attname()
+
+
 class BackendQuery(NonrelQuery):
 
     def __init__(self, compiler, fields):
@@ -59,12 +51,25 @@ class BackendQuery(NonrelQuery):
                 'via_fk_name': store_via_field.db_column or store_via_field.get_attname()
             }
 
+        print self.query
         self.db_query = RestQuery(self.connection.connector, self.query.model._meta.db_table,
-                                  [field.db_column or field.get_attname() for field in fields], **query_kwargs)
+                                  self._get_db_field_names(), **query_kwargs)
+        print 'ok'
+
+    def _get_db_field_names(self):
+        return [get_field_db_name(field) for field in self.fields if not isinstance(field, CompanyForeignKey)]
 
     # This is needed for debugging
     def __repr__(self):
         return '<FlexibeeQuery>'
+
+    def _field_db_name(self, field):
+        return field.db_column or field.get_attname()
+
+    def _get_store_via(self):
+        for field in self.query.model._meta.fields:
+            if isinstance(field, StoreViaForeignKey):
+                return field
 
     def fetch(self, low_mark=0, high_mark=None):
 
@@ -79,24 +84,19 @@ class BackendQuery(NonrelQuery):
         for entity in self.db_query.fetch(low_mark, base):
 
             for field in self.fields:
-                db_field_name = field.db_column or field.get_attname()
-                entity[db_field_name] = self.compiler.convert_value_from_db(field.get_internal_type(),
-                                                                            entity[db_field_name], db_field_name,
-                                                                            entity)
+                db_field_name = get_field_db_name(field)
+                if db_field_name == 'flexibee_company_id':
+                    entity[db_field_name] = field.rel.to._default_manager.get(flexibee_db_name=self.db_query.db_name).pk
+                else:
+                    entity[db_field_name] = self.compiler.convert_value_from_db(field.get_internal_type(),
+                                                                                entity[db_field_name], db_field_name,
+                                                                                entity)
             yield entity
-
-    def _get_store_via(self):
-        for field in self.query.model._meta.fields:
-            if isinstance(field, StoreViaForeignKey):
-                return field
 
     def count(self, limit=None):
         return self.db_query.count()
 
     def delete(self):
-        print 'ted delete'
-        print self._get_store_via()
-        print self.fields
         self.db_query.delete()
 
     def insert(self, data):
@@ -115,17 +115,22 @@ class BackendQuery(NonrelQuery):
     # transforming OR filters to AND filters:
     # NOT (a OR b) => (NOT a) AND (NOT b)
     def add_filter(self, field, lookup_type, negated, value):
-        try:
-            op = OPERATORS_MAP[lookup_type]
-        except KeyError:
-            raise DatabaseError("Lookup type %r isn't supported" % lookup_type)
+        if field.get_attname() == 'flexibee_company_id':
+            if lookup_type != 'exact':
+                raise DatabaseError("Lookup type %r isn't supported for flexibee_company" % lookup_type)
+            self.db_query.set_db_name(field.rel.to._default_manager.get(pk=value).flexibee_db_name)
+        else:
+            try:
+                op = OPERATORS_MAP[lookup_type]
+            except KeyError:
+                raise DatabaseError("Lookup type %r isn't supported" % lookup_type)
 
-        # Handle special-case lookup types
-        if callable(op):
-            op, value = op(lookup_type, value)
+            # Handle special-case lookup types
+            if callable(op):
+                op, value = op(lookup_type, value)
 
-        db_value = self.compiler.convert_value_for_db(field.get_internal_type(), value)
-        self.db_query.add_filter(field.db_column or field.get_attname(), op, db_value, negated)
+            db_value = self.compiler.convert_value_for_db(field.get_internal_type(), value)
+            self.db_query.add_filter(field.db_column or field.get_attname(), op, db_value, negated)
 
 
 class SQLCompiler(NonrelCompiler):
@@ -198,6 +203,8 @@ class SQLCompiler(NonrelCompiler):
 
         # Exists
         if self.query.extra == {'a': (u'1', [])}:
+            print self.has_results()
+
             return self.has_results()
 
 
@@ -265,9 +272,10 @@ class SQLUpdateCompiler(NonrelUpdateCompiler, SQLCompiler):
             db_value = self.convert_value_for_db(field.get_internal_type(), value)
             db_field = field.db_column or field.get_attname()
             if db_value is not None:
-                db_values[field.column] = db_value
+                db_values[db_field] = db_value
 
         return self.build_query().update(db_values)
+
 
 class SQLDeleteCompiler(NonrelDeleteCompiler, SQLCompiler):
     pass
