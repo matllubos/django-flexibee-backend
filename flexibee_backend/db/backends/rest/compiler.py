@@ -12,7 +12,8 @@ from dateutil.parser import parse
 
 from .connection import RestQuery
 
-from flexibee_backend.db.models import StoreViaForeignKey, CompanyForeignKey
+from flexibee_backend.db.models import StoreViaForeignKey, CompanyForeignKey, FlexibeeModel
+from django.db.models.sql.subqueries import DeleteQuery
 
 
 # TODO: Change this to match your DB
@@ -51,10 +52,8 @@ class BackendQuery(NonrelQuery):
                 'via_fk_name': store_via_field.db_column or store_via_field.get_attname()
             }
 
-        print self.query
         self.db_query = RestQuery(self.connection.connector, self.query.model._meta.db_table,
                                   self._get_db_field_names(), **query_kwargs)
-        print 'ok'
 
     def _get_db_field_names(self):
         return [get_field_db_name(field) for field in self.fields if not isinstance(field, CompanyForeignKey)]
@@ -203,8 +202,6 @@ class SQLCompiler(NonrelCompiler):
 
         # Exists
         if self.query.extra == {'a': (u'1', [])}:
-            print self.has_results()
-
             return self.has_results()
 
 
@@ -232,12 +229,18 @@ class SQLCompiler(NonrelCompiler):
 # This handles both inserts and updates of individual entities
 class SQLInsertCompiler(NonrelInsertCompiler, SQLCompiler):
 
-    def insert(self, data, return_id=False):
-        return self.build_query().insert(data)
+    def insert(self, data, db_name, return_id=False):
+        query = self.build_query()
+        query.db_query.set_db_name(db_name)
+
+        return query.insert(data)
 
     def execute_sql(self, return_id=False):
         to_insert = []
         pk_field = self.query.get_meta().pk
+
+        db_name = None
+
         for obj in self.query.objs:
             field_values = {}
             for field in self.query.fields:
@@ -249,15 +252,21 @@ class SQLInsertCompiler(NonrelInsertCompiler, SQLCompiler):
                     raise IntegrityError("You can't set %s (a non-nullable "
                                          "field) to None!" % field.name)
 
-                # Prepare value for database, note that query.values have
-                # already passed through get_db_prep_save.
-                value = self.ops.value_for_db(value, field)
-                db_value = self.convert_value_for_db(field.get_internal_type(), value)
-                if db_value is not None:
-                    field_values[field.column] = db_value
+                if field.get_attname() == 'flexibee_company_id':
+                    cur_db_name = field.rel.to._default_manager.get(pk=value).flexibee_db_name
+                    if db_name is not None and cur_db_name != db_name:
+                        raise DatabaseError('You can not create insert for objects with different companies')
+                    db_name = cur_db_name
+                else:
+                    # Prepare value for database, note that query.values have
+                    # already passed through get_db_prep_save.
+                    value = self.ops.value_for_db(value, field)
+                    db_value = self.convert_value_for_db(field.get_internal_type(), value)
+                    if db_value is not None:
+                        field_values[field.column] = db_value
             to_insert.append(field_values)
 
-        key = self.insert(to_insert, return_id=return_id)
+        key = self.insert(to_insert, db_name, return_id=return_id)
 
         # Pass the key value through normal database deconversion.
         return self.ops.convert_values(self.ops.value_from_db(key, pk_field), pk_field)
@@ -267,16 +276,30 @@ class SQLUpdateCompiler(NonrelUpdateCompiler, SQLCompiler):
 
     def update(self, values):
         db_values = {}
+        query = self.build_query()
 
         for field, value in values:
-            db_value = self.convert_value_for_db(field.get_internal_type(), value)
-            db_field = field.db_column or field.get_attname()
-            if db_value is not None:
-                db_values[db_field] = db_value
+            if field.get_attname() == 'flexibee_company_id':
+                query.db_query.set_db_name(field.rel.to._default_manager.get(pk=value).flexibee_db_name)
+            else:
+                db_value = self.convert_value_for_db(field.get_internal_type(), value)
+                db_field = field.db_column or field.get_attname()
+                if db_value is not None:
+                    db_values[db_field] = db_value
 
-        return self.build_query().update(db_values)
+        return query.update(db_values)
 
 
 class SQLDeleteCompiler(NonrelDeleteCompiler, SQLCompiler):
-    pass
+
+    def execute_sql(self, result_type=MULTI):
+
+        print type(self.query)
+        DeleteQuery
+        print self.query.objs
+        try:
+            self.build_query([self.query.get_meta().pk]).delete()
+        except EmptyResultSet:
+            pass
+
 

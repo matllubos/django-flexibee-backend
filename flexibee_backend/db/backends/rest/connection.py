@@ -18,9 +18,9 @@ class Connector(object):
         self.cache = {}
         self.waiting_writes = SortedDict()
 
-    def _check_settings(self, db_name):
+    def _check_settings(self, db_name, table_name):
         if db_name is None:
-            raise DatabaseError('For flexibee DB connector must be set company')
+            raise DatabaseError('For flexibee DB connector must be set company: %s' % table_name)
 
     def _is_request_for_one_object(self, filters):
         return len(filters) == 1 and filters[0].field == 'id' and filters[0].op == '=' and not filters[0].negated
@@ -59,7 +59,7 @@ class Connector(object):
         return '__'.join((filters_key, fields_key, relations_key, ordering_key, str(offset), str(base)))
 
     def _get_from_cache(self, db_name, table_name, filters, fields, relations, ordering, offset, base):
-        if table_name in self.cache:
+        if '__'.join((db_name, table_name)) in self.cache:
             table_cache = self.cache.get('__'.join((db_name, table_name)))
             key = self._generate_key(filters, fields, relations, ordering, offset, base)
             if key in table_cache:
@@ -75,7 +75,7 @@ class Connector(object):
         table_cache[key] = data
 
     def read(self, db_name, table_name, filters, fields, relations, ordering, offset, base):
-        self._check_settings(db_name)
+        self._check_settings(db_name, table_name)
 
         filters = list(filters)
         fields = list(fields)
@@ -97,13 +97,14 @@ class Connector(object):
         url = self.URL % {'hostname': self.hostname, 'port': self.port, 'db_name': db_name, 'table_name': table_name,
                           'query_string': self._get_query_string(fields, relations, ordering, offset, base), 'extra': extra}
 
+
         r = requests.get(url, auth=(self.username, self.password))
         data = r.json().get('winstrom')
         self._add_to_cache(db_name, table_name, filters, fields, relations, ordering, offset, base, data)
         return data
 
     def write(self, db_name, table_name, data):
-        self._check_settings(db_name)
+        self._check_settings(db_name, table_name)
 
         url = self.URL % {'hostname': self.hostname, 'port': self.port, 'db_name': db_name,
                           'table_name': table_name, 'query_string': '', 'extra': ''}
@@ -117,10 +118,10 @@ class Connector(object):
             self._clear_table_cache(db_name, table_name)
             return True, r.json().get('winstrom')
         else:
-            raise False, r.json().get('winstrom')
+            return False, r.json().get('winstrom')
 
     def delete(self, db_name, table_name, data):
-        self._check_settings(db_name)
+        self._check_settings(db_name, table_name)
 
         url = self.URL % {'hostname': self.hostname, 'port': self.port, 'db_name': db_name,
                           'table_name': table_name, 'query_string': '', 'extra': ''}
@@ -162,8 +163,6 @@ class CachedEntity(object):
 
 
 class RestQuery(object):
-
-    URL = 'https://%(hostname)s/c/%(company)s/%(table_name)s%(extra)s.json?%(query_string)s'
 
     def __init__(self, connector, table_name, fields=[], relations=[], via_table_name=None, via_relation_name=None,
                  via_fk_name=None):
@@ -287,7 +286,6 @@ class RestQuery(object):
             for entity in self.get(extra_fields=extra_fields).get(self.table_name):
                 entity_obj = {'id': entity.get('id')}
                 if self._is_via():
-                    print entity
                     entity_obj[self.via_fk_name] = entity['%s@ref' % self.via_fk_name].split('/')[-1][:-5]
                 data.append(entity_obj)
 
