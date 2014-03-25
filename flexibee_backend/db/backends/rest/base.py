@@ -4,7 +4,6 @@ from djangotoolbox.db.base import NonrelDatabaseFeatures, \
     NonrelDatabaseCreation
 
 from .connection import Connector
-from django.middleware.transaction import TransactionMiddleware
 
 
 class DatabaseCreation(NonrelDatabaseCreation):
@@ -44,3 +43,6 @@ class DatabaseWrapper(NonrelDatabaseWrapper):
         self.connector = Connector(
             self.settings_dict['USER'], self.settings_dict['PASSWORD'], self.settings_dict['HOSTNAME'],
             self.settings_dict['PORT'])
+
+    def set_db_name(self, db_name):
+        self.connector.db_name = db_name

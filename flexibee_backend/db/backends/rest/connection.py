@@ -17,9 +17,10 @@ class Connector(object):
         self.port = port
         self.cache = {}
         self.waiting_writes = SortedDict()
+        self.db_name = None
 
-    def _check_settings(self, db_name, table_name):
-        if db_name is None:
+    def _check_settings(self, table_name):
+        if self.db_name is None:
             raise DatabaseError('For flexibee DB connector must be set company: %s' % table_name)
 
     def _is_request_for_one_object(self, filters):
@@ -58,24 +59,26 @@ class Connector(object):
         ordering_key = ','.join(ordering)
         return '__'.join((filters_key, fields_key, relations_key, ordering_key, str(offset), str(base)))
 
-    def _get_from_cache(self, db_name, table_name, filters, fields, relations, ordering, offset, base):
-        if '__'.join((db_name, table_name)) in self.cache:
-            table_cache = self.cache.get('__'.join((db_name, table_name)))
+    def _get_from_cache(self, table_name, filters, fields, relations, ordering, offset, base):
+        if '__'.join((self.db_name, table_name)) in self.cache:
+            table_cache = self.cache.get('__'.join((self.db_name, table_name)))
             key = self._generate_key(filters, fields, relations, ordering, offset, base)
             if key in table_cache:
                 return table_cache.get(key)
 
-    def _clear_table_cache(self, db_name, table_name):
+    def _clear_table_cache(self, table_name):
         if table_name in self.cache:
-            del self.cache['__'.join((db_name, table_name))]
+            del self.cache['__'.join((self.db_name, table_name))]
 
-    def _add_to_cache(self, db_name, table_name, filters, fields, relations, ordering, offset, base, data):
-        table_cache = self.cache['__'.join((db_name, table_name))] = self.cache.get('__'.join((db_name, table_name)), {})
+    def _add_to_cache(self, table_name, filters, fields, relations, ordering, offset, base, data):
+        table_cache = self.cache['__'.join((self.db_name, table_name))] = self.cache\
+                                                                            .get('__'.join((self.db_name, table_name)),
+                                                                                 {})
         key = self._generate_key(filters, fields, relations, ordering, offset, base)
         table_cache[key] = data
 
-    def read(self, db_name, table_name, filters, fields, relations, ordering, offset, base):
-        self._check_settings(db_name, table_name)
+    def read(self, table_name, filters, fields, relations, ordering, offset, base):
+        self._check_settings(table_name)
 
         filters = list(filters)
         fields = list(fields)
@@ -87,26 +90,29 @@ class Connector(object):
         ordering.sort()
         relations.sort()
 
-        data = self._get_from_cache(db_name, table_name, filters, fields, relations, ordering, offset, base)
+        data = self._get_from_cache(table_name, filters, fields, relations, ordering, offset, base)
         if data:
             return data
 
         extra = self._get_extra_filter(filters)
 
 
-        url = self.URL % {'hostname': self.hostname, 'port': self.port, 'db_name': db_name, 'table_name': table_name,
+        url = self.URL % {'hostname': self.hostname, 'port': self.port, 'db_name': self.db_name, 'table_name': table_name,
                           'query_string': self._get_query_string(fields, relations, ordering, offset, base), 'extra': extra}
 
-
         r = requests.get(url, auth=(self.username, self.password))
-        data = r.json().get('winstrom')
-        self._add_to_cache(db_name, table_name, filters, fields, relations, ordering, offset, base, data)
-        return data
 
-    def write(self, db_name, table_name, data):
-        self._check_settings(db_name, table_name)
+        if r.status_code in [200, 201]:
+            data = r.json().get('winstrom')
+            self._add_to_cache(table_name, filters, fields, relations, ordering, offset, base, data)
+            return data
+        else:
+            raise DatabaseError('Rest GET method error, response: %s' % r.text)
 
-        url = self.URL % {'hostname': self.hostname, 'port': self.port, 'db_name': db_name,
+    def write(self, table_name, data):
+        self._check_settings(table_name)
+
+        url = self.URL % {'hostname': self.hostname, 'port': self.port, 'db_name': self.db_name,
                           'table_name': table_name, 'query_string': '', 'extra': ''}
 
         data = {'winstrom': {table_name: data}}
@@ -115,24 +121,26 @@ class Connector(object):
         r = requests.put(url, data=json.dumps(data), headers=headers, auth=(self.username, self.password))
 
         if r.status_code in [200, 201]:
-            self._clear_table_cache(db_name, table_name)
-            return True, r.json().get('winstrom')
+            self._clear_table_cache(table_name)
+            return r.json().get('winstrom')
         else:
-            return False, r.json().get('winstrom')
+            raise DatabaseError('Rest PUT method error, response: %s' % r.text)
 
-    def delete(self, db_name, table_name, data):
-        self._check_settings(db_name, table_name)
+    def delete(self, table_name, data):
+        self._check_settings(table_name)
 
-        url = self.URL % {'hostname': self.hostname, 'port': self.port, 'db_name': db_name,
-                          'table_name': table_name, 'query_string': '', 'extra': ''}
-        data = {'winstrom': {table_name: data}}
-        headers = {'Accept': 'application/json'}
-        r = requests.delete(url, data=json.dumps(data), headers=headers, auth=(self.username,
-                                                                            self.password))
+        for data_obj in data:
 
-        self._clear_table_cache(db_name, table_name)
-        if r.status_code not in [200, 404]:
-            raise DatabaseError(r.json().get('winstrom').get('results')[0].get('errors'))
+            url = self.URL % {'hostname': self.hostname, 'port': self.port, 'db_name': self.db_name,
+                              'table_name': table_name, 'query_string': '', 'extra': '/%s' % data_obj.get('id')}
+            data = {'winstrom': {table_name: data_obj}}
+            headers = {'Accept': 'application/json'}
+
+            r = requests.delete(url, data=json.dumps(data), headers=headers, auth=(self.username,
+                                                                                self.password))
+            self._clear_table_cache(table_name)
+            if r.status_code not in [200, 404]:
+                raise DatabaseError('Rest DELETE method error, response: %s' % r.text)
 
 
 class Filter(object):
@@ -173,7 +181,6 @@ class RestQuery(object):
         self.order_fields = []
         self.filters = []
         self.relations = []
-        self.db_name = None
 
         self.via_table_name = via_table_name
         self.via_relation_name = via_relation_name
@@ -192,10 +199,14 @@ class RestQuery(object):
     def get(self, offset=0, base=0, extra_fields=[]):
         fields = list(self.fields)
         fields += extra_fields
-        return self.connector.read(self.db_name, self.table_name, self.filters, fields, self.relations, self.order_fields, offset, base)
+        return self.connector.read(self.table_name, self.filters, fields, self.relations, self.order_fields, offset, base)
+
+    @property
+    def db_name(self):
+        return self.connector.db_name
 
     def count(self):
-        data = self.connector.read(self.db_name, self.table_name, self.filters, ['id'], self.relations, self.order_fields, 0, 0)
+        data = self.connector.read(self.table_name, self.filters, ['id'], self.relations, self.order_fields, 0, 0)
         if self.connector._is_request_for_one_object(self.filters):
             return len(data.get(self.table_name))
         return data.get('@rowCount')
@@ -205,9 +216,6 @@ class RestQuery(object):
 
     def add_ordering(self, field_name, is_asc):
         self.order_fields.append('%s@%s' % (field_name, is_asc and 'A' or 'D'))
-
-    def set_db_name(self, db_name):
-        self.db_name = db_name
 
     def add_filter(self, field_name, op, db_value, negated):
         self.filters.append(Filter(field_name, op, db_value, negated))
@@ -222,17 +230,13 @@ class RestQuery(object):
         if self._is_via():
             self._store_via(data)
         else:
-            created, output = self.connector.write(self.db_name, self.table_name, data)
-            if created:
-                return output.get('results')[0].get('id')
-            else:
-                raise DatabaseError(output.get('results')[0].get('errors')[0].get('message'))
+            output = self.connector.write(self.table_name, data)
+            return output.get('results')[0].get('id')
 
     def _store_via(self, data):
         for obj_data in data:
             store_view_db_query = RestQuery(self.connector, self.via_table_name, ['id'],
                                             [self.via_relation_name])
-            store_view_db_query.set_db_name(self.db_name)
             store_view_db_query.add_filter('id', '=', obj_data.get(self.via_fk_name), False)
             via_data = {'id': str(obj_data.get(self.via_fk_name))}
             via_data[self.via_relation_name] = [obj_data]
@@ -242,7 +246,6 @@ class RestQuery(object):
         for obj_data in data:
             store_view_db_query = RestQuery(self.connector, self.via_table_name, ['id'],
                                             [self.via_relation_name])
-            store_view_db_query.set_db_name(self.db_name)
             store_view_db_query.add_filter('id', '=', obj_data.get(self.via_fk_name), False)
             via_data = store_view_db_query.fetch(0, 0)[0]
             db_related_objs = via_data[self.via_relation_name]
@@ -270,15 +273,13 @@ class RestQuery(object):
         if self._is_via():
             self._store_via(data)
         else:
-            created, output = self.connector.write(self.db_name, self.table_name, data)
-            if created:
-                return len(data)
-            else:
-                raise DatabaseError(output.get('results')[0].get('errors'))
+            self.connector.write(self.table_name, data)
+            return len(data)
 
     def delete(self):
         data = []
         if not self.connector._is_request_for_one_object(self.filters) or self._is_via():
+
             extra_fields = ['id']
             if self._is_via():
                 extra_fields.append(self.via_fk_name)
@@ -295,4 +296,4 @@ class RestQuery(object):
         if self._is_via():
             self._delete_via(data)
         else:
-            self.connector.delete(self.db_name, self.table_name, data)
+            self.connector.delete(self.table_name, data)

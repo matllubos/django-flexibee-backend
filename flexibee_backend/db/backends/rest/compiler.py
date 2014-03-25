@@ -2,8 +2,8 @@ from functools import wraps
 
 from django.db.models.sql.constants import MULTI, SINGLE
 from django.db.utils import DatabaseError, IntegrityError
-
 from django.db.models.sql import aggregates as sqlaggregates
+from django.utils.encoding import force_text
 
 from djangotoolbox.db.basecompiler import NonrelQuery, NonrelCompiler, \
     NonrelInsertCompiler, NonrelUpdateCompiler, NonrelDeleteCompiler, EmptyResultSet
@@ -12,8 +12,7 @@ from dateutil.parser import parse
 
 from .connection import RestQuery
 
-from flexibee_backend.db.models import StoreViaForeignKey, CompanyForeignKey, FlexibeeModel
-from django.db.models.sql.subqueries import DeleteQuery
+from flexibee_backend.db.models import StoreViaForeignKey, CompanyForeignKey
 
 
 # TODO: Change this to match your DB
@@ -27,6 +26,7 @@ OPERATORS_MAP = {
     'in': lambda lookup_type, values: ('in', '(%s)' % ','.join([str(value) for value in values])),
     'isnull': 'is null',
     'like': 'like',
+    'icontains': 'like',
     'startswith': 'begins',
     'endswith': 'ends',
 }
@@ -114,22 +114,19 @@ class BackendQuery(NonrelQuery):
     # transforming OR filters to AND filters:
     # NOT (a OR b) => (NOT a) AND (NOT b)
     def add_filter(self, field, lookup_type, negated, value):
-        if field.get_attname() == 'flexibee_company_id':
-            if lookup_type != 'exact':
-                raise DatabaseError("Lookup type %r isn't supported for flexibee_company" % lookup_type)
-            self.db_query.set_db_name(field.rel.to._default_manager.get(pk=value).flexibee_db_name)
-        else:
-            try:
-                op = OPERATORS_MAP[lookup_type]
-            except KeyError:
-                raise DatabaseError("Lookup type %r isn't supported" % lookup_type)
+        try:
+            op = OPERATORS_MAP[lookup_type]
+        except KeyError:
+            raise DatabaseError("Lookup type %r isn't supported" % lookup_type)
 
-            # Handle special-case lookup types
-            if callable(op):
-                op, value = op(lookup_type, value)
+        # Handle special-case lookup types
+        if callable(op):
+            op, value = op(lookup_type, value)
 
-            db_value = self.compiler.convert_value_for_db(field.get_internal_type(), value)
-            self.db_query.add_filter(field.db_column or field.get_attname(), op, db_value, negated)
+        db_value = self.compiler.convert_value_for_db(field.get_internal_type(), value)
+        if field.get_internal_type() in ['TextField', 'CharField']:
+            db_value = '\'%s\'' % db_value
+        self.db_query.add_filter(field.db_column or field.get_attname(), op, db_value, negated)
 
 
 class SQLCompiler(NonrelCompiler):
@@ -229,17 +226,13 @@ class SQLCompiler(NonrelCompiler):
 # This handles both inserts and updates of individual entities
 class SQLInsertCompiler(NonrelInsertCompiler, SQLCompiler):
 
-    def insert(self, data, db_name, return_id=False):
+    def insert(self, data, return_id=False):
         query = self.build_query()
-        query.db_query.set_db_name(db_name)
-
         return query.insert(data)
 
     def execute_sql(self, return_id=False):
         to_insert = []
         pk_field = self.query.get_meta().pk
-
-        db_name = None
 
         for obj in self.query.objs:
             field_values = {}
@@ -252,12 +245,7 @@ class SQLInsertCompiler(NonrelInsertCompiler, SQLCompiler):
                     raise IntegrityError("You can't set %s (a non-nullable "
                                          "field) to None!" % field.name)
 
-                if field.get_attname() == 'flexibee_company_id':
-                    cur_db_name = field.rel.to._default_manager.get(pk=value).flexibee_db_name
-                    if db_name is not None and cur_db_name != db_name:
-                        raise DatabaseError('You can not create insert for objects with different companies')
-                    db_name = cur_db_name
-                else:
+                if field.get_attname() != 'flexibee_company_id':
                     # Prepare value for database, note that query.values have
                     # already passed through get_db_prep_save.
                     value = self.ops.value_for_db(value, field)
@@ -266,7 +254,7 @@ class SQLInsertCompiler(NonrelInsertCompiler, SQLCompiler):
                         field_values[field.column] = db_value
             to_insert.append(field_values)
 
-        key = self.insert(to_insert, db_name, return_id=return_id)
+        key = self.insert(to_insert, return_id=return_id)
 
         # Pass the key value through normal database deconversion.
         return self.ops.convert_values(self.ops.value_from_db(key, pk_field), pk_field)
@@ -279,9 +267,7 @@ class SQLUpdateCompiler(NonrelUpdateCompiler, SQLCompiler):
         query = self.build_query()
 
         for field, value in values:
-            if field.get_attname() == 'flexibee_company_id':
-                query.db_query.set_db_name(field.rel.to._default_manager.get(pk=value).flexibee_db_name)
-            else:
+            if field.get_attname() != 'flexibee_company_id':
                 db_value = self.convert_value_for_db(field.get_internal_type(), value)
                 db_field = field.db_column or field.get_attname()
                 if db_value is not None:
@@ -291,15 +277,6 @@ class SQLUpdateCompiler(NonrelUpdateCompiler, SQLCompiler):
 
 
 class SQLDeleteCompiler(NonrelDeleteCompiler, SQLCompiler):
-
-    def execute_sql(self, result_type=MULTI):
-
-        print type(self.query)
-        DeleteQuery
-        print self.query.objs
-        try:
-            self.build_query([self.query.get_meta().pk]).delete()
-        except EmptyResultSet:
-            pass
+    pass
 
 
