@@ -4,6 +4,7 @@ from django.utils.translation import ugettext_lazy as _
 from django.utils.text import slugify
 
 from flexibee_backend import config
+from flexibee_backend.is_core.filters import FlexibeeCompanyFieldFilter
 
 
 class CompanyForeignKey(ForeignKey):
@@ -45,6 +46,7 @@ class FlexibeeModel(models.Model):
 
     flexibee_company = CompanyForeignKey(config.FLEXIBEE_COMPANY_MODEL, null=True, blank=True, editable=False,
                                          on_delete=models.DO_NOTHING)
+    flexibee_company.filter = FlexibeeCompanyFieldFilter
 
     class Meta:
         abstract = True
