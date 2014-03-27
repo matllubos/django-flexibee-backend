@@ -57,7 +57,6 @@ class Command(NoArgsCommand):
                 else:
                     raise SyncException(r.json().get('winstrom').get('message'))
 
-
     def handle_noargs(self, **options):
         try:
             self._create_companies()
