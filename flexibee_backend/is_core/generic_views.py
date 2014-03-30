@@ -8,6 +8,8 @@ from is_core.generic_views.table_views import TableView
 
 from flexibee_backend.db.utils import set_db_name
 
+from .filters import *
+
 
 class ListParentMixin(object):
 

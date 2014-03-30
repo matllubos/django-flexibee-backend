@@ -122,7 +122,7 @@ class BackendQuery(NonrelQuery):
         if callable(op):
             op, value = op(lookup_type, value)
 
-        db_value = self.compiler.convert_value_for_db(field.get_internal_type(), value)
+        db_value = self.compiler.convert_filter_value_for_db(field.get_internal_type(), value)
         if field.get_internal_type() in ['TextField', 'CharField']:
             db_value = '\'%s\'' % db_value
         self.db_query.add_filter(field.db_column or field.get_attname(), op, db_value, negated)
@@ -130,6 +130,19 @@ class BackendQuery(NonrelQuery):
 
 class SQLCompiler(NonrelCompiler):
     query_class = BackendQuery
+
+
+    def convert_filter_value_for_db(self, db_type, value):
+        if value is None:
+            return value
+
+        if db_type == 'DateField':
+            return value.strftime('%Y-%m-%d')
+
+        if isinstance(value, str):
+            # Always store strings as unicode
+            value = value.decode('utf-8')
+        return value
 
     # This gets called for each field type when you fetch() an entity.
     # db_type is the string that you used in the DatabaseCreation mapping
