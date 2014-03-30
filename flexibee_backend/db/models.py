@@ -40,6 +40,7 @@ class Company(models.Model):
     class FlexibeeMeta:
         mapping = {}
         db_name_slug_from_field = None
+        readonly_fields = []
 
 
 class FlexibeeModel(models.Model):

@@ -1,5 +1,6 @@
 import requests
 import json
+import logging
 
 from django.db.utils import DatabaseError
 from django.utils.encoding import force_text
@@ -9,12 +10,12 @@ from django.utils.datastructures import SortedDict
 class Connector(object):
 
     URL = 'https://%(hostname)s/c/%(db_name)s/%(table_name)s%(extra)s.json?%(query_string)s'
+    logger = logging.getLogger('flexibee-backend')
 
-    def __init__(self, username, password, hostname, port):
+    def __init__(self, username, password, hostname):
         self.username = username
         self.password = password
         self.hostname = hostname
-        self.port = port
         self.cache = {}
         self.waiting_writes = SortedDict()
         self.db_name = None
@@ -96,51 +97,60 @@ class Connector(object):
 
         extra = self._get_extra_filter(filters)
 
-
-        url = self.URL % {'hostname': self.hostname, 'port': self.port, 'db_name': self.db_name, 'table_name': table_name,
+        url = self.URL % {'hostname': self.hostname, 'db_name': self.db_name, 'table_name': table_name,
                           'query_string': self._get_query_string(fields, relations, ordering, offset, base), 'extra': extra}
 
+        self.logger.info('Send GET to %s' % url)
         r = requests.get(url, auth=(self.username, self.password))
 
         if r.status_code in [200, 201]:
+            self.logger.info('Response %s, content: %s' % (r.status_code, force_text(r.text)))
             data = r.json().get('winstrom')
             self._add_to_cache(table_name, filters, fields, relations, ordering, offset, base, data)
             return data
         else:
-            raise DatabaseError('Rest GET method error, response: %s' % r.text)
+            self.logger.warning('Response %s, content: %s' % (r.status_code, force_text(r.text)))
+            raise DatabaseError('Rest GET method error, response: %s' % force_text(r.text))
 
     def write(self, table_name, data):
         self._check_settings(table_name)
 
-        url = self.URL % {'hostname': self.hostname, 'port': self.port, 'db_name': self.db_name,
+        url = self.URL % {'hostname': self.hostname, 'db_name': self.db_name,
                           'table_name': table_name, 'query_string': '', 'extra': ''}
 
         data = {'winstrom': {table_name: data}}
         headers = {'Accept': 'application/json'}
 
+        self.logger.info('Send PUT to %s' % url)
         r = requests.put(url, data=json.dumps(data), headers=headers, auth=(self.username, self.password))
 
         if r.status_code in [200, 201]:
             self._clear_table_cache(table_name)
+            self.logger.info('Response %s, content: %s' % (r.status_code, force_text(r.text)))
             return r.json().get('winstrom')
         else:
-            raise DatabaseError('Rest PUT method error, response: %s' % r.text)
+            self.logger.warning('Response %s, content: %s' % (r.status_code, force_text(r.text)))
+            raise DatabaseError('Rest PUT method error, response: %s' % force_text(r.text))
 
     def delete(self, table_name, data):
         self._check_settings(table_name)
 
         for data_obj in data:
 
-            url = self.URL % {'hostname': self.hostname, 'port': self.port, 'db_name': self.db_name,
+            url = self.URL % {'hostname': self.hostname, 'db_name': self.db_name,
                               'table_name': table_name, 'query_string': '', 'extra': '/%s' % data_obj.get('id')}
             data = {'winstrom': {table_name: data_obj}}
             headers = {'Accept': 'application/json'}
 
+            self.logger.info('Send DELETE to %s' % url)
             r = requests.delete(url, data=json.dumps(data), headers=headers, auth=(self.username,
                                                                                 self.password))
             self._clear_table_cache(table_name)
             if r.status_code not in [200, 404]:
-                raise DatabaseError('Rest DELETE method error, response: %s' % r.text)
+                self.logger.info('Response %s, content: %s' % (r.status_code, force_text(r.text)))
+                raise DatabaseError('Rest DELETE method error, response: %s' % force_text(r.text))
+            else:
+                self.logger.info('Response %s, content: %s' % (r.status_code, force_text(r.text)))
 
 
 class Filter(object):

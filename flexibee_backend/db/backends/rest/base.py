@@ -41,8 +41,7 @@ class DatabaseWrapper(NonrelDatabaseWrapper):
         self.validation = DatabaseValidation(self)
         self.introspection = DatabaseIntrospection(self)
         self.connector = Connector(
-            self.settings_dict['USER'], self.settings_dict['PASSWORD'], self.settings_dict['HOSTNAME'],
-            self.settings_dict['PORT'])
+            self.settings_dict['USER'], self.settings_dict['PASSWORD'], self.settings_dict['HOSTNAME'])
 
     def set_db_name(self, db_name):
         self.connector.db_name = db_name

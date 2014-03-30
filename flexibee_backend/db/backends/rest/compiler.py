@@ -3,7 +3,6 @@ from functools import wraps
 from django.db.models.sql.constants import MULTI, SINGLE
 from django.db.utils import DatabaseError, IntegrityError
 from django.db.models.sql import aggregates as sqlaggregates
-from django.utils.encoding import force_text
 
 from djangotoolbox.db.basecompiler import NonrelQuery, NonrelCompiler, \
     NonrelInsertCompiler, NonrelUpdateCompiler, NonrelDeleteCompiler, EmptyResultSet
@@ -245,7 +244,8 @@ class SQLInsertCompiler(NonrelInsertCompiler, SQLCompiler):
                     raise IntegrityError("You can't set %s (a non-nullable "
                                          "field) to None!" % field.name)
 
-                if field.get_attname() != 'flexibee_company_id':
+                if field.get_attname() != 'flexibee_company_id' \
+                    and field.get_attname() not in self.query.model.FlexibeeMeta.readonly_fields:
                     # Prepare value for database, note that query.values have
                     # already passed through get_db_prep_save.
                     value = self.ops.value_for_db(value, field)
@@ -269,8 +269,9 @@ class SQLUpdateCompiler(NonrelUpdateCompiler, SQLCompiler):
         for field, value in values:
             if field.get_attname() != 'flexibee_company_id':
                 db_value = self.convert_value_for_db(field.get_internal_type(), value)
-                db_field = field.db_column or field.get_attname()
-                if db_value is not None:
+                db_field = get_field_db_name(field)
+
+                if db_value is not None and field.get_attname() not in self.query.model.FlexibeeMeta.readonly_fields:
                     db_values[db_field] = db_value
 
         return query.update(db_values)
