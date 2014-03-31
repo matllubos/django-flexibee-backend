@@ -1,3 +1,5 @@
+import decimal
+
 from functools import wraps
 
 from django.db.models.sql.constants import MULTI, SINGLE
@@ -152,6 +154,8 @@ class SQLCompiler(NonrelCompiler):
                 return entity['%s@ref' % field].split('/')[-1][:-5]
             else:
                 return None
+        if db_type == 'DecimalField':
+            return decimal.Decimal(value)
         if db_type == 'FloatField':
             return float(value)
         if db_type == 'IntegerField':

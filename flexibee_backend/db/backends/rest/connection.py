@@ -1,10 +1,14 @@
-import requests
-import json
-import logging
+import requests, json, logging, decimal
 
 from django.db.utils import DatabaseError
 from django.utils.encoding import force_text
 from django.utils.datastructures import SortedDict
+
+
+def decimal_default(obj):
+    if isinstance(obj, decimal.Decimal):
+        return str(obj)
+    raise TypeError
 
 
 class Connector(object):
@@ -78,6 +82,9 @@ class Connector(object):
         key = self._generate_key(filters, fields, relations, ordering, offset, base)
         table_cache[key] = data
 
+    def _serialize(self, data):
+        return json.dumps(data, default=decimal_default)
+
     def read(self, table_name, filters, fields, relations, ordering, offset, base):
         self._check_settings(table_name)
 
@@ -122,7 +129,7 @@ class Connector(object):
         headers = {'Accept': 'application/json'}
 
         self.logger.info('Send PUT to %s' % url)
-        r = requests.put(url, data=json.dumps(data), headers=headers, auth=(self.username, self.password))
+        r = requests.put(url, data=self._serialize(data), headers=headers, auth=(self.username, self.password))
 
         if r.status_code in [200, 201]:
             self._clear_table_cache(table_name)
@@ -143,7 +150,7 @@ class Connector(object):
             headers = {'Accept': 'application/json'}
 
             self.logger.info('Send DELETE to %s' % url)
-            r = requests.delete(url, data=json.dumps(data), headers=headers, auth=(self.username,
+            r = requests.delete(url, data=self._serialize(data), headers=headers, auth=(self.username,
                                                                                 self.password))
             self._clear_table_cache(table_name)
             if r.status_code not in [200, 404]:
