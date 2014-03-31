@@ -3,10 +3,11 @@ from django.utils.encoding import force_text
 
 from is_core.generic_views.form_views import AddModelFormView, EditModelFormView
 from is_core.generic_views.mixins import TabsViewMixin
-
+from is_core.generic_views.inline_form_views import StackedInlineFormView, TabularInlineFormView
 from is_core.generic_views.table_views import TableView
+from is_core.generic_views.exceptions import SaveObjectException
 
-from flexibee_backend.db.utils import set_db_name
+from flexibee_backend.db.backends.rest.exceptions import FlexibeeDatabaseException
 
 from .filters import *
 
@@ -94,3 +95,21 @@ class FlexibeeViewMixin(object):
 
     def get_company(self, request):
         raise NotImplemented
+
+
+class FlexibeeInlineFormView(object):
+    def save_obj(self, obj, change):
+        self.pre_save_obj(obj, change)
+        try:
+            obj.save()
+        except FlexibeeDatabaseException as ex:
+            raise SaveObjectException(ex.errors)
+        self.post_save_obj(obj, change)
+
+
+class FlexibeeTabularInlineFormView(FlexibeeInlineFormView, TabularInlineFormView):
+    pass
+
+
+class FlexibeeStackedInlineFormView(FlexibeeInlineFormView, StackedInlineFormView):
+    pass

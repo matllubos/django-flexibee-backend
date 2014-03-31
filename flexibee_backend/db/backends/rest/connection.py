@@ -4,6 +4,8 @@ from django.db.utils import DatabaseError
 from django.utils.encoding import force_text
 from django.utils.datastructures import SortedDict
 
+from flexibee_backend.db.backends.rest.exceptions import FlexibeeDatabaseException
+
 
 def decimal_default(obj):
     if isinstance(obj, decimal.Decimal):
@@ -117,7 +119,7 @@ class Connector(object):
             return data
         else:
             self.logger.warning('Response %s, content: %s' % (r.status_code, force_text(r.text)))
-            raise DatabaseError('Rest GET method error, response: %s' % force_text(r.text))
+            raise FlexibeeDatabaseException('Rest GET method error', r)
 
     def write(self, table_name, data):
         self._check_settings(table_name)
@@ -137,7 +139,7 @@ class Connector(object):
             return r.json().get('winstrom')
         else:
             self.logger.warning('Response %s, content: %s' % (r.status_code, force_text(r.text)))
-            raise DatabaseError('Rest PUT method error, response: %s' % force_text(r.text))
+            raise FlexibeeDatabaseException('Rest PUT method error', r)
 
     def delete(self, table_name, data):
         self._check_settings(table_name)
@@ -155,7 +157,7 @@ class Connector(object):
             self._clear_table_cache(table_name)
             if r.status_code not in [200, 404]:
                 self.logger.info('Response %s, content: %s' % (r.status_code, force_text(r.text)))
-                raise DatabaseError('Rest DELETE method error, response: %s' % force_text(r.text))
+                raise FlexibeeDatabaseException('Rest DELETE method error', r)
             else:
                 self.logger.info('Response %s, content: %s' % (r.status_code, force_text(r.text)))
 
@@ -226,7 +228,7 @@ class RestQuery(object):
         data = self.connector.read(self.table_name, self.filters, ['id'], self.relations, self.order_fields, 0, 0)
         if self.connector._is_request_for_one_object(self.filters):
             return len(data.get(self.table_name))
-        return data.get('@rowCount')
+        return int(data.get('@rowCount'))
 
     def fetch(self, offset, base):
         return self.get(offset, base or 0).get(self.table_name)

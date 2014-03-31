@@ -3,6 +3,7 @@ from django.utils.datastructures import SortedDict
 from django.db.transaction import get_connection
 from django.core.urlresolvers import reverse
 from django.shortcuts import get_object_or_404
+from django.db.utils import DatabaseError
 
 from is_core.main import UIRestModelISCore
 from is_core.generic_views.inline_form_views import TabularInlineFormView
@@ -11,11 +12,13 @@ from is_core.generic_views.table_views import TableView
 from is_core.rest.resource import RestModelResource
 from is_core.patterns import RestPattern
 from is_core.generic_views.form_views import AddModelFormView, EditModelFormView
+from is_core.generic_views.exceptions import SaveObjectException
 
 from flexibee_backend.is_core.patterns import FlexibeeRestPattern, FlexibeeUIPattern
 from flexibee_backend import config
 from flexibee_backend.is_core.generic_views import FlexibeeAddModelFormView, FlexibeeEditModelFormView, \
     FlexibeeTableView
+from flexibee_backend.db.backends.rest.exceptions import FlexibeeDatabaseException
 
 
 class FlexibeeIsCore(UIRestModelISCore):
@@ -27,6 +30,12 @@ class FlexibeeIsCore(UIRestModelISCore):
                                   FlexibeeUIPattern)),
                         ('list', (r'^/(?P<flexibee_db_name>[-\w]+)/?$', FlexibeeTableView, FlexibeeUIPattern)),
                 ))
+
+    def save_model(self, request, obj, form, change):
+        try:
+            obj.save()
+        except FlexibeeDatabaseException as ex:
+            raise SaveObjectException(ex.errors)
 
     def get_show_in_menu(self, request):
         return self.get_companies(request).exists()
