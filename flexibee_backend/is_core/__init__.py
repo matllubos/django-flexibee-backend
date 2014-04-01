@@ -19,6 +19,7 @@ from flexibee_backend import config
 from flexibee_backend.is_core.generic_views import FlexibeeAddModelFormView, FlexibeeEditModelFormView, \
     FlexibeeTableView
 from flexibee_backend.db.backends.rest.exceptions import FlexibeeDatabaseException
+from is_core.actions import WebAction
 
 
 class FlexibeeIsCore(UIRestModelISCore):
