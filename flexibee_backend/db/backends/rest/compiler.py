@@ -31,7 +31,7 @@ OPERATORS_MAP = {
     'endswith': 'ends',
 }
 
-DEFAULT_READONLY_FIELD_CLASSES = [RemoteFileField]
+DEFAULT_READONLY_FIELD_CLASSES = (RemoteFileField,)
 
 
 def get_field_db_name(field):
