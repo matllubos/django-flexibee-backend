@@ -1,6 +1,5 @@
 from django.db.transaction import get_connection
 
-
 from flexibee_backend import config
 
 

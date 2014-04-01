@@ -15,7 +15,7 @@ def decimal_default(obj):
 
 class Connector(object):
 
-    URL = 'https://%(hostname)s/c/%(db_name)s/%(table_name)s%(extra)s.json?%(query_string)s'
+    URL = 'https://%(hostname)s/c/%(db_name)s/%(table_name)s%(extra)s.%(type)s?%(query_string)s'
     logger = logging.getLogger('flexibee-backend')
 
     def __init__(self, username, password, hostname):
@@ -107,7 +107,8 @@ class Connector(object):
         extra = self._get_extra_filter(filters)
 
         url = self.URL % {'hostname': self.hostname, 'db_name': self.db_name, 'table_name': table_name,
-                          'query_string': self._get_query_string(fields, relations, ordering, offset, base), 'extra': extra}
+                          'query_string': self._get_query_string(fields, relations, ordering, offset, base),
+                          'extra': extra, 'type': 'json'}
 
         self.logger.info('Send GET to %s' % url)
         r = requests.get(url, auth=(self.username, self.password))
@@ -125,7 +126,7 @@ class Connector(object):
         self._check_settings(table_name)
 
         url = self.URL % {'hostname': self.hostname, 'db_name': self.db_name,
-                          'table_name': table_name, 'query_string': '', 'extra': ''}
+                          'table_name': table_name, 'query_string': '', 'extra': '', 'type': 'json'}
 
         data = {'winstrom': {table_name: data}}
         headers = {'Accept': 'application/json'}
@@ -147,19 +148,25 @@ class Connector(object):
         for data_obj in data:
 
             url = self.URL % {'hostname': self.hostname, 'db_name': self.db_name,
-                              'table_name': table_name, 'query_string': '', 'extra': '/%s' % data_obj.get('id')}
+                              'table_name': table_name, 'query_string': '',
+                              'extra': '/%s' % data_obj.get('id'), 'type': 'json'}
             data = {'winstrom': {table_name: data_obj}}
             headers = {'Accept': 'application/json'}
 
             self.logger.info('Send DELETE to %s' % url)
-            r = requests.delete(url, data=self._serialize(data), headers=headers, auth=(self.username,
-                                                                                self.password))
+            r = requests.delete(url, data=self._serialize(data), headers=headers, auth=(self.username, self.password))
             self._clear_table_cache(table_name)
             if r.status_code not in [200, 404]:
                 self.logger.info('Response %s, content: %s' % (r.status_code, force_text(r.text)))
                 raise FlexibeeDatabaseException('Rest DELETE method error', r)
             else:
                 self.logger.info('Response %s, content: %s' % (r.status_code, force_text(r.text)))
+
+    def download_file(self, table_name, id, type):
+        url = self.URL % {'hostname': self.hostname, 'db_name': self.db_name,
+                          'table_name': table_name, 'query_string': '', 'extra': '/%s' % id, 'type': type}
+        r = requests.get(url, auth=(self.username, self.password))
+        return r.text
 
 
 class Filter(object):

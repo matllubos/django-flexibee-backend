@@ -13,8 +13,7 @@ from dateutil.parser import parse
 
 from .connection import RestQuery
 
-from flexibee_backend.db.models import StoreViaForeignKey, CompanyForeignKey
-
+from flexibee_backend.db.models import StoreViaForeignKey, CompanyForeignKey, RemoteFileField
 
 # TODO: Change this to match your DB
 # Valid query types (a dictionary is used for speedy lookups).
@@ -31,6 +30,8 @@ OPERATORS_MAP = {
     'startswith': 'begins',
     'endswith': 'ends',
 }
+
+DEFAULT_READONLY_FIELD_CLASSES = [RemoteFileField]
 
 
 def get_field_db_name(field):
@@ -87,6 +88,9 @@ class BackendQuery(NonrelQuery):
                 db_field_name = get_field_db_name(field)
                 if db_field_name == 'flexibee_company_id':
                     entity[db_field_name] = field.rel.to._default_manager.get(flexibee_db_name=self.db_query.db_name).pk
+                elif isinstance(field, RemoteFileField):
+                    pass
+                    # print self.connector.download_file(self.query.model._meta.db_table, entity.get('id'), 'pdf')
                 else:
                     entity[db_field_name] = self.compiler.convert_value_from_db(field.get_internal_type(),
                                                                                 entity[db_field_name], db_field_name,
@@ -262,7 +266,8 @@ class SQLInsertCompiler(NonrelInsertCompiler, SQLCompiler):
                                          "field) to None!" % field.name)
 
                 if field.get_attname() != 'flexibee_company_id' \
-                    and field.get_attname() not in self.query.model.FlexibeeMeta.readonly_fields:
+                    and field.get_attname() not in self.query.model.FlexibeeMeta.readonly_fields \
+                    and not isinstance(field, DEFAULT_READONLY_FIELD_CLASSES):
                     # Prepare value for database, note that query.values have
                     # already passed through get_db_prep_save.
                     value = self.ops.value_for_db(value, field)
@@ -284,11 +289,14 @@ class SQLUpdateCompiler(NonrelUpdateCompiler, SQLCompiler):
         query = self.build_query()
 
         for field, value in values:
-            if field.get_attname() != 'flexibee_company_id':
+            if field.get_attname() != 'flexibee_company_id'\
+                and field.get_attname() not in self.query.model.FlexibeeMeta.readonly_fields\
+                and not isinstance(field, DEFAULT_READONLY_FIELD_CLASSES):
+
                 db_value = self.convert_value_for_db(field.get_internal_type(), value)
                 db_field = get_field_db_name(field)
 
-                if db_value is not None and field.get_attname() not in self.query.model.FlexibeeMeta.readonly_fields:
+                if db_value is not None:
                     db_values[db_field] = db_value
 
         return query.update(db_values)
