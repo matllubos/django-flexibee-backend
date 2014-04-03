@@ -3,8 +3,10 @@ import requests, json, logging, decimal
 from django.db.utils import DatabaseError
 from django.utils.encoding import force_text
 from django.utils.datastructures import SortedDict
+from django.template.defaultfilters import urlencode
 
 from flexibee_backend.db.backends.rest.exceptions import FlexibeeDatabaseException
+from django.utils.http import urlquote
 
 
 def decimal_default(obj):
@@ -40,7 +42,7 @@ class Connector(object):
         else:
             filter_string = ' and '.join(['(%s)' % force_text(filter) for filter in filters])
             if filter_string:
-                extra = '/(%s)' % filter_string
+                extra = '/(%s)' % urlquote(filter_string, safe='')
         return extra
 
     def _get_query_string(self, fields, relations, ordering, offset, base):
@@ -219,7 +221,7 @@ class RestQuery(object):
         else:
             filter_string = ' and '.join(['(%s)' % force_text(filter) for filter in self.filters])
             if filter_string:
-                extra = '/(%s)' % filter_string
+                extra = '/(%s)' % urlencode(filter_string)
         return extra
 
     def get(self, offset=0, base=0, extra_fields=[]):
