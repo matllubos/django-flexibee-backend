@@ -8,6 +8,7 @@ from is_core.generic_views.table_views import TableView
 from is_core.generic_views.exceptions import SaveObjectException
 
 from flexibee_backend.db.backends.rest.exceptions import FlexibeeDatabaseException
+from flexibee_backend.db.utils import set_db_name
 
 from .filters import *
 

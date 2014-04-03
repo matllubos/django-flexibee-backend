@@ -2,9 +2,8 @@ from django.db import models
 
 from is_core.filters.default_filters import DefaultFieldFilter
 
-from flexibee_backend.db.utils import set_db_name
-
 from dateutil.parser import parse
+
 from flexibee_backend.db.models import FlexibeeModel
 
 

@@ -144,6 +144,8 @@ class SQLCompiler(NonrelCompiler):
 
         if db_type == 'DateField':
             return value.strftime('%Y-%m-%d')
+        if db_type == 'BooleanField':
+            return value and 'true' or 'false'
 
         if isinstance(value, str):
             # Always store strings as unicode
@@ -166,6 +168,8 @@ class SQLCompiler(NonrelCompiler):
             return int(value)
         if db_type == 'DateField':
             return parse(value.split('+')[0]).date()
+        if db_type == 'BooleanField':
+            return value == 'true' and True or False
 
         if isinstance(value, str):
             # Always retrieve strings as unicode
@@ -182,6 +186,8 @@ class SQLCompiler(NonrelCompiler):
             tz = value.strftime('%z') or '+0000'
             value = '%s%s' % (value.strftime('%Y-%m-%d'), '%s:%s' % (tz[:3], tz[3:]))
             return value
+        if db_type == 'BooleanField':
+            return value and 'true' or 'false'
 
         if isinstance(value, str):
             # Always store strings as unicode
