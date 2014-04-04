@@ -23,7 +23,7 @@ OPERATORS_MAP = {
     'gte': '>=',
     'lt': '<',
     'lte': '<=',
-    'in': lambda lookup_type, values: ('in', '(%s)' % ','.join([str(value) for value in values])),
+    'in': 'in',
     'isnull': 'is null',
     'like': 'like',
     'icontains': 'like',
@@ -129,8 +129,6 @@ class BackendQuery(NonrelQuery):
             op, value = op(lookup_type, value)
 
         db_value = self.compiler.convert_filter_value_for_db(field.get_internal_type(), value)
-        if field.get_internal_type() in ['TextField', 'CharField']:
-            db_value = '\'%s\'' % db_value
         self.db_query.add_filter(field.db_column or field.get_attname(), op, db_value, negated)
 
 
@@ -141,15 +139,18 @@ class SQLCompiler(NonrelCompiler):
     def convert_filter_value_for_db(self, db_type, value):
         if value is None:
             return value
-
+        if isinstance(value, (list, tuple)):
+            return '(%s)' % ', '.join([self.convert_filter_value_for_db(db_type, subval) for subval in value])
+        if isinstance(value, str):
+            # Always store strings as unicode
+            value = value.decode('utf-8')
         if db_type == 'DateField':
             return value.strftime('%Y-%m-%d')
         if db_type == 'BooleanField':
             return value and 'true' or 'false'
+        if db_type in ['TextField', 'CharField']:
+            return '\'%s\'' % value
 
-        if isinstance(value, str):
-            # Always store strings as unicode
-            value = value.decode('utf-8')
         return value
 
     # This gets called for each field type when you fetch() an entity.
