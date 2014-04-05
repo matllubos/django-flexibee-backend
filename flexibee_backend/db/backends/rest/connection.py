@@ -41,7 +41,6 @@ class Connector(object):
             extra = '/%s' % filters[0].value
         else:
             filter_string = ' and '.join(['(%s)' % force_text(filter) for filter in filters])
-            print filter_string
             if filter_string:
                 extra = '/(%s)' % urlquote(filter_string, safe='')
         return extra

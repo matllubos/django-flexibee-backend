@@ -14,6 +14,7 @@ from dateutil.parser import parse
 from .connection import RestQuery
 
 from flexibee_backend.db.models import StoreViaForeignKey, CompanyForeignKey, RemoteFileField
+from django.utils.encoding import force_text
 
 # TODO: Change this to match your DB
 # Valid query types (a dictionary is used for speedy lookups).
@@ -90,7 +91,6 @@ class BackendQuery(NonrelQuery):
                     entity[db_field_name] = field.rel.to._default_manager.get(flexibee_db_name=self.db_query.db_name).pk
                 elif isinstance(field, RemoteFileField):
                     pass
-                    # print self.connector.download_file(self.query.model._meta.db_table, entity.get('id'), 'pdf')
                 else:
                     entity[db_field_name] = self.compiler.convert_value_from_db(field.get_internal_type(),
                                                                                 entity[db_field_name], db_field_name,
@@ -140,7 +140,8 @@ class SQLCompiler(NonrelCompiler):
         if value is None:
             return value
         if isinstance(value, (list, tuple)):
-            return '(%s)' % ', '.join([self.convert_filter_value_for_db(db_type, subval) for subval in value])
+            return '(%s)' % ', '.join([force_text(self.convert_filter_value_for_db(db_type, subval))
+                                       for subval in value])
         if isinstance(value, str):
             # Always store strings as unicode
             value = value.decode('utf-8')
