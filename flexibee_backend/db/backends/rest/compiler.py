@@ -85,17 +85,19 @@ class BackendQuery(NonrelQuery):
 
         for entity in self.db_query.fetch(low_mark, base):
 
+            output = {}
+
             for field in self.fields:
                 db_field_name = get_field_db_name(field)
                 if db_field_name == 'flexibee_company_id':
-                    entity[db_field_name] = field.rel.to._default_manager.get(flexibee_db_name=self.db_query.db_name).pk
+                    output[db_field_name] = field.rel.to._default_manager.get(flexibee_db_name=self.db_query.db_name).pk
                 elif isinstance(field, RemoteFileField):
                     pass
                 else:
-                    entity[db_field_name] = self.compiler.convert_value_from_db(field.get_internal_type(),
+                    output[db_field_name] = self.compiler.convert_value_from_db(field.get_internal_type(),
                                                                                 entity[db_field_name], db_field_name,
                                                                                 entity)
-            yield entity
+            yield output
 
     def count(self, limit=None):
         return self.db_query.count()
