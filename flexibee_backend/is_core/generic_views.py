@@ -89,10 +89,13 @@ class FlexibeeTableView(FlexibeeTabsViewMixin, TableView):
 class FlexibeeViewMixin(object):
 
     def dispatch(self, request, *args, **kwargs):
+        self.set_db_name(request)
+        return super(FlexibeeViewMixin, self).dispatch(request, *args, **kwargs)
+
+    def set_db_name(self, request):
         company = self.get_company(request)
         if company:
             set_db_name(company.flexibee_db_name)
-        return super(FlexibeeViewMixin, self).dispatch(request, *args, **kwargs)
 
     def get_company(self, request):
         raise NotImplemented
