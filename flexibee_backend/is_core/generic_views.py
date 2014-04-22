@@ -24,7 +24,7 @@ class ListParentMixin(object):
                         {'verbose_name': self.model._meta.verbose_name,
                          'verbose_name_plural': self.model._meta.verbose_name_plural},
                         reverse('%s:list-%s' % (self.site_name, self.core.get_menu_group_pattern_name()),
-                                kwargs={'flexibee_db_name': self.core.get_company(self.request).flexibee_db_name}),
+                                kwargs={'company': self.core.get_company(self.request).pk}),
                                        not self.add_current_to_breadcrumbs)
 
 
@@ -36,7 +36,7 @@ class FlexibeeDefaultCoreModelFormView(object):
                 and not self.has_snippet():
             info = self.site_name, self.core.get_menu_group_pattern_name()
             return reverse('%s:list-%s' % info,
-                           kwargs={'flexibee_db_name': self.core.get_company(self.request).flexibee_db_name})
+                           kwargs={'company': self.core.get_company(self.request).pk})
         return None
 
     def get_success_url(self, obj):
@@ -45,13 +45,13 @@ class FlexibeeDefaultCoreModelFormView(object):
                 and self.core.ui_patterns.get('list').view.has_get_permission(self.request, self.core) \
                 and 'save' in self.request.POST:
             return reverse('%s:list-%s' % info,
-                           kwargs={'flexibee_db_name': self.core.get_company(self.request).flexibee_db_name})
+                           kwargs={'company': self.core.get_company(self.request).pk})
         elif 'edit' in self.core.ui_patterns \
                 and self.core.ui_patterns.get('edit').view.has_get_permission(self.request, self.core) \
                 and 'save-and-continue' in self.request.POST:
             return reverse('%s:edit-%s' % info,
                            kwargs={'pk': obj.pk,
-                                   'flexibee_db_name': self.core.get_company(self.request).flexibee_db_name})
+                                   'company': self.core.get_company(self.request).pk})
         return ''
 
 
@@ -67,9 +67,9 @@ class FlexibeeTabsViewMixin(TabsViewMixin):
         info = self.site_name, self.core.get_menu_group_pattern_name()
         menu_items = []
         for company in companies:
-            url = reverse('%s:list-%s' % info, kwargs={'flexibee_db_name': company.flexibee_db_name})
+            url = reverse('%s:list-%s' % info, kwargs={'company': company.pk})
             menu_items.append(MenuItem(force_text(company), url,
-                                       self.request.kwargs.get('flexibee_db_name') == company.flexibee_db_name))
+                                       self.request.kwargs.get('company') == str(company.pk)))
         return menu_items
 
 

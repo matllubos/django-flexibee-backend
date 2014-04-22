@@ -25,11 +25,11 @@ from is_core.actions import WebAction
 class FlexibeeIsCore(UIRestModelISCore):
 
     view_classes = SortedDict((
-                        ('add', (r'^/add/(?P<flexibee_db_name>[-\w]+)/$', FlexibeeAddModelFormView,
+                        ('add', (r'^/add/(?P<company>[-\w]+)/$', FlexibeeAddModelFormView,
                                  FlexibeeUIPattern)),
-                        ('edit', (r'^/(?P<flexibee_db_name>[-\w]+)/(?P<pk>[-\w]+)/$', FlexibeeEditModelFormView,
+                        ('edit', (r'^/(?P<company>[-\w]+)/(?P<pk>[-\w]+)/$', FlexibeeEditModelFormView,
                                   FlexibeeUIPattern)),
-                        ('list', (r'^/(?P<flexibee_db_name>[-\w]+)/?$', FlexibeeTableView, FlexibeeUIPattern)),
+                        ('list', (r'^/(?P<company>[-\w]+)/?$', FlexibeeTableView, FlexibeeUIPattern)),
                 ))
 
     def save_model(self, request, obj, form, change):
@@ -48,7 +48,7 @@ class FlexibeeIsCore(UIRestModelISCore):
         raise NotImplemented
 
     def get_company(self, request):
-        return get_object_or_404(self.get_companies(request), flexibee_db_name=request.kwargs.get('flexibee_db_name'))
+        return get_object_or_404(self.get_companies(request), pk=request.kwargs.get('company'))
 
     def get_resource_patterns(self):
         resource_patterns = SortedDict()
@@ -56,20 +56,23 @@ class FlexibeeIsCore(UIRestModelISCore):
         resource = RestModelResource(name='Api%sHandler' % self.get_menu_group_pattern_name(), core=self)
         resource_patterns['api-resource'] = FlexibeeRestPattern('api-resource-%s' % self.get_menu_group_pattern_name(),
                                                                 self.site_name,
-                                                                r'^/api/(?P<flexibee_db_name>[-\w]+)/(?P<pk>[-\w]+)/?$',
+                                                                r'^/api/(?P<company>[-\w]+)/(?P<pk>[-\w]+)/?$',
                                                                 resource, self, ('GET', 'PUT', 'DELETE'))
         resource_patterns['api'] = FlexibeeRestPattern('api-%s' % self.get_menu_group_pattern_name(),
-                                                       self.site_name, r'^/api/(?P<flexibee_db_name>[-\w]+)/?$',
+                                                       self.site_name, r'^/api/(?P<company>[-\w]+)/?$',
                                                        resource, self, ('GET', 'POST'))
         return resource_patterns
 
     def get_api_url(self, request):
-        return reverse(self.get_api_url_name(), args=(self.get_company(request).flexibee_db_name,))
+        return reverse(self.get_api_url_name(), args=(self.get_company(request).pk,))
 
     def get_add_url(self, request):
-        return self.ui_patterns.get('add').get_url_string(kwargs={'flexibee_db_name':
-                                                                  self.get_company(request).flexibee_db_name})
+        return self.ui_patterns.get('add').get_url_string(kwargs={'company':
+                                                                  self.get_company(request).pk})
 
     def menu_url(self, request):
         return reverse(('%(site_name)s:' + self.menu_url_name) % {'site_name': self.site_name},
-                       kwargs={'flexibee_db_name': self.get_companies(request).first().flexibee_db_name})
+                       kwargs={'company': self.get_companies(request).first().pk})
+
+    def get_menu_groups(self):
+        return self.menu_parent_groups + (self.menu_group,)
