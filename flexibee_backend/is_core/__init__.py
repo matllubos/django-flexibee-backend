@@ -16,8 +16,7 @@ from is_core.generic_views.exceptions import SaveObjectException
 
 from flexibee_backend.is_core.patterns import FlexibeeRestPattern, FlexibeeUIPattern
 from flexibee_backend import config
-from flexibee_backend.is_core.generic_views import FlexibeeAddModelFormView, FlexibeeEditModelFormView, \
-    FlexibeeTableView
+from flexibee_backend.is_core.generic_views import FlexibeeAddModelFormView, FlexibeeEditModelFormView
 from flexibee_backend.db.backends.rest.exceptions import FlexibeeDatabaseException
 from is_core.actions import WebAction
 
@@ -25,11 +24,11 @@ from is_core.actions import WebAction
 class FlexibeeIsCore(UIRestModelISCore):
 
     view_classes = SortedDict((
-                        ('add', (r'^/add/(?P<company>[-\w]+)/$', FlexibeeAddModelFormView,
+                        ('add', (r'^/add/$', FlexibeeAddModelFormView,
                                  FlexibeeUIPattern)),
-                        ('edit', (r'^/(?P<company>[-\w]+)/(?P<pk>[-\w]+)/$', FlexibeeEditModelFormView,
+                        ('edit', (r'^/(?P<pk>[-\w]+)/$', FlexibeeEditModelFormView,
                                   FlexibeeUIPattern)),
-                        ('list', (r'^/(?P<company>[-\w]+)/?$', FlexibeeTableView, FlexibeeUIPattern)),
+                        ('list', (r'^/?$', TableView, FlexibeeUIPattern)),
                 ))
 
     def save_model(self, request, obj, form, change):
@@ -48,7 +47,10 @@ class FlexibeeIsCore(UIRestModelISCore):
         raise NotImplemented
 
     def get_company(self, request):
-        return get_object_or_404(self.get_companies(request), pk=request.kwargs.get('company'))
+        return get_object_or_404(self.get_companies(request), pk=request.kwargs.get('company_pk'))
+
+    def get_url_prefix(self):
+        return 'company/(?P<company_pk>[-\w]+)/%s' % '/'.join(self.get_menu_groups())
 
     def get_resource_patterns(self):
         resource_patterns = SortedDict()
@@ -56,10 +58,10 @@ class FlexibeeIsCore(UIRestModelISCore):
         resource = RestModelResource(name='Api%sHandler' % self.get_menu_group_pattern_name(), core=self)
         resource_patterns['api-resource'] = FlexibeeRestPattern('api-resource-%s' % self.get_menu_group_pattern_name(),
                                                                 self.site_name,
-                                                                r'^/api/(?P<company>[-\w]+)/(?P<pk>[-\w]+)/?$',
+                                                                r'^/api/(?P<pk>[-\w]+)/?$',
                                                                 resource, self, ('GET', 'PUT', 'DELETE'))
         resource_patterns['api'] = FlexibeeRestPattern('api-%s' % self.get_menu_group_pattern_name(),
-                                                       self.site_name, r'^/api/(?P<company>[-\w]+)/?$',
+                                                       self.site_name, r'^/api/?$',
                                                        resource, self, ('GET', 'POST'))
         return resource_patterns
 
@@ -67,12 +69,13 @@ class FlexibeeIsCore(UIRestModelISCore):
         return reverse(self.get_api_url_name(), args=(self.get_company(request).pk,))
 
     def get_add_url(self, request):
-        return self.ui_patterns.get('add').get_url_string(kwargs={'company':
+        return self.ui_patterns.get('add').get_url_string(kwargs={'company_pk':
                                                                   self.get_company(request).pk})
 
     def menu_url(self, request):
         return reverse(('%(site_name)s:' + self.menu_url_name) % {'site_name': self.site_name},
-                       kwargs={'company': self.get_companies(request).first().pk})
+                       kwargs={'company_pk': self.get_companies(request).first().pk})
 
     def get_menu_groups(self):
         return self.menu_parent_groups + (self.menu_group,)
+
