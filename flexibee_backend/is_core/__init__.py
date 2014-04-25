@@ -78,4 +78,3 @@ class FlexibeeIsCore(UIRestModelISCore):
 
     def get_menu_groups(self):
         return self.menu_parent_groups + (self.menu_group,)
-

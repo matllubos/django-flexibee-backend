@@ -18,14 +18,14 @@ class ListParentMixin(object):
     add_current_to_breadcrumbs = True
 
     def list_bread_crumbs_menu_item(self):
-        from is_core.templatetags.menu import MenuItem
+        from is_core.templatetags.menu import LinkMenuItem
 
-        return MenuItem(self.model._ui_meta.list_verbose_name %
-                        {'verbose_name': self.model._meta.verbose_name,
-                         'verbose_name_plural': self.model._meta.verbose_name_plural},
-                        reverse('%s:list-%s' % (self.site_name, self.core.get_menu_group_pattern_name()),
-                                kwargs={'company_pk': self.core.get_company(self.request).pk}),
-                                       not self.add_current_to_breadcrumbs)
+        return LinkMenuItem(self.model._ui_meta.list_verbose_name %
+                            {'verbose_name': self.model._meta.verbose_name,
+                             'verbose_name_plural': self.model._meta.verbose_name_plural},
+                            reverse('%s:list-%s' % (self.site_name, self.core.get_menu_group_pattern_name()),
+                                    kwargs={'company_pk': self.core.get_company(self.request).pk}),
+                                           not self.add_current_to_breadcrumbs)
 
 
 class FlexibeeDefaultCoreModelFormView(object):
@@ -58,7 +58,7 @@ class FlexibeeDefaultCoreModelFormView(object):
 class FlexibeeTabsViewMixin(TabsViewMixin):
 
     def get_tab_menu_items(self):
-        from is_core.templatetags.menu import MenuItem
+        from is_core.templatetags.menu import LinkMenuItem
 
         companies = self.core.get_companies(self.request)
         if len(companies) < 2:
@@ -68,8 +68,8 @@ class FlexibeeTabsViewMixin(TabsViewMixin):
         menu_items = []
         for company in companies:
             url = reverse('%s:list-%s' % info, kwargs={'company': company.pk})
-            menu_items.append(MenuItem(force_text(company), url,
-                                       self.request.kwargs.get('company') == str(company.pk)))
+            menu_items.append(LinkMenuItem(force_text(company), url,
+                                           self.request.kwargs.get('company') == str(company.pk)))
         return menu_items
 
 
