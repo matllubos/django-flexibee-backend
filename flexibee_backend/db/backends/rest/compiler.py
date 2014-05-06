@@ -164,6 +164,11 @@ class SQLCompiler(NonrelCompiler):
                 return entity['%s@ref' % field].split('/')[-1][:-5]
             else:
                 return None
+
+        if (value == '' or value is None) and db_type in ['DecimalField', 'FloatField', 'IntegerField',
+                                                          'DateField', 'BooleanField']:
+            return None
+
         if db_type == 'DecimalField':
             return decimal.Decimal(value)
         if db_type == 'FloatField':
