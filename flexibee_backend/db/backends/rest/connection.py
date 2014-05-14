@@ -4,9 +4,9 @@ from django.db.utils import DatabaseError
 from django.utils.encoding import force_text
 from django.utils.datastructures import SortedDict
 from django.template.defaultfilters import urlencode
+from django.utils.http import urlquote
 
 from flexibee_backend.db.backends.rest.exceptions import FlexibeeDatabaseException
-from django.utils.http import urlquote
 
 
 def decimal_default(obj):
@@ -169,6 +169,10 @@ class Connector(object):
                           'table_name': table_name, 'query_string': '', 'extra': '/%s' % id, 'type': type}
         r = requests.get(url, auth=(self.username, self.password))
         return r
+
+    def reset(self):
+        self.cache = {}
+        self.db_name = None
 
 
 class Filter(object):
