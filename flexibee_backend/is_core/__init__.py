@@ -8,20 +8,20 @@ from django.db.utils import DatabaseError
 from is_core.main import UIRestModelISCore
 from is_core.generic_views.inline_form_views import TabularInlineFormView
 from is_core.generic_views.table_views import TableView
-
 from is_core.rest.resource import RestModelResource
 from is_core.patterns import RestPattern
 from is_core.generic_views.form_views import AddModelFormView, EditModelFormView
 from is_core.generic_views.exceptions import SaveObjectException
+from is_core.actions import WebAction
 
 from flexibee_backend.is_core.patterns import FlexibeeRestPattern, FlexibeeUIPattern
 from flexibee_backend import config
 from flexibee_backend.is_core.generic_views import FlexibeeAddModelFormView, FlexibeeEditModelFormView
 from flexibee_backend.db.backends.rest.exceptions import FlexibeeDatabaseException
-from is_core.actions import WebAction
 
 
 class FlexibeeIsCore(UIRestModelISCore):
+    abstract = True
 
     view_classes = SortedDict((
                         ('add', (r'^/add/$', FlexibeeAddModelFormView,
@@ -54,15 +54,11 @@ class FlexibeeIsCore(UIRestModelISCore):
 
     def get_resource_patterns(self):
         resource_patterns = SortedDict()
-
-        resource = RestModelResource(name='Api%sHandler' % self.get_menu_group_pattern_name(), core=self)
         resource_patterns['api-resource'] = FlexibeeRestPattern('api-resource-%s' % self.get_menu_group_pattern_name(),
-                                                                self.site_name,
-                                                                r'^/api/(?P<pk>[-\w]+)/?$',
-                                                                resource, self, ('GET', 'PUT', 'DELETE'))
-        resource_patterns['api'] = FlexibeeRestPattern('api-%s' % self.get_menu_group_pattern_name(),
-                                                       self.site_name, r'^/api/?$',
-                                                       resource, self, ('GET', 'POST'))
+                                                                self.site_name, r'^/api/(?P<pk>[-\w]+)/?$',
+                                                                self.rest_resource, self, ('GET', 'PUT', 'DELETE'))
+        resource_patterns['api'] = FlexibeeRestPattern('api-%s' % self.get_menu_group_pattern_name(), self.site_name,
+                                                       r'^/api/?$', self.rest_resource, self, ('GET', 'POST'))
         return resource_patterns
 
     def get_api_url(self, request):
@@ -77,4 +73,4 @@ class FlexibeeIsCore(UIRestModelISCore):
                        kwargs={'company_pk': self.get_companies(request).first().pk})
 
     def get_menu_groups(self):
-        return self.menu_parent_groups + (self.menu_group,)
+        return self.menu_parent_groups + [self.menu_group]

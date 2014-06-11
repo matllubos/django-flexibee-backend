@@ -1,8 +1,5 @@
 from django.db.utils import DatabaseError
-from django.utils.encoding import force_text, smart_text
-from easyprocess.unicodeutil import unidecode
 
-import urllib2
 
 class FlexibeeDatabaseException(DatabaseError):
 
