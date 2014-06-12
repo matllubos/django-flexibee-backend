@@ -4,7 +4,6 @@ from django.utils.encoding import force_text
 from is_core.generic_views.form_views import AddModelFormView, EditModelFormView
 from is_core.generic_views.mixins import TabsViewMixin
 from is_core.generic_views.inline_form_views import StackedInlineFormView, TabularInlineFormView
-from is_core.generic_views.table_views import TableView
 from is_core.generic_views.exceptions import SaveObjectException
 
 from flexibee_backend.db.backends.rest.exceptions import FlexibeeDatabaseException
@@ -18,7 +17,7 @@ class ListParentMixin(object):
     add_current_to_breadcrumbs = True
 
     def list_bread_crumbs_menu_item(self):
-        from is_core.templatetags.menu import LinkMenuItem
+        from is_core.menu import LinkMenuItem
 
         return LinkMenuItem(self.model._ui_meta.list_verbose_name %
                             {'verbose_name': self.model._meta.verbose_name,
@@ -58,7 +57,7 @@ class FlexibeeDefaultCoreModelFormView(object):
 class FlexibeeTabsViewMixin(TabsViewMixin):
 
     def get_tab_menu_items(self):
-        from is_core.templatetags.menu import LinkMenuItem
+        from is_core.menu import LinkMenuItem
 
         companies = self.core.get_companies(self.request)
         if len(companies) < 2:
