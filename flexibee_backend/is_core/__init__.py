@@ -14,22 +14,14 @@ from is_core.generic_views.form_views import AddModelFormView, EditModelFormView
 from is_core.generic_views.exceptions import SaveObjectException
 from is_core.actions import WebAction
 
-from flexibee_backend.is_core.patterns import FlexibeeRestPattern, FlexibeeUIPattern
+from flexibee_backend.is_core.patterns import FlexibeeRestPattern, FlexibeeUIPattern, FlexibeePattern
 from flexibee_backend import config
-from flexibee_backend.is_core.generic_views import FlexibeeAddModelFormView, FlexibeeEditModelFormView
 from flexibee_backend.db.backends.rest.exceptions import FlexibeeDatabaseException
 
 
 class FlexibeeIsCore(UIRestModelISCore):
     abstract = True
-
-    view_classes = SortedDict((
-                        ('add', (r'^/add/$', FlexibeeAddModelFormView,
-                                 FlexibeeUIPattern)),
-                        ('edit', (r'^/(?P<pk>[-\w]+)/$', FlexibeeEditModelFormView,
-                                  FlexibeeUIPattern)),
-                        ('list', (r'^/?$', TableView, FlexibeeUIPattern)),
-                ))
+    default_ui_pattern_class = FlexibeePattern
 
     def save_model(self, request, obj, form, change):
         try:
@@ -65,8 +57,7 @@ class FlexibeeIsCore(UIRestModelISCore):
         return reverse(self.get_api_url_name(), args=(self.get_company(request).pk,))
 
     def get_add_url(self, request):
-        return self.ui_patterns.get('add').get_url_string(kwargs={'company_pk':
-                                                                  self.get_company(request).pk})
+        return self.ui_patterns.get('add').get_url_string(request, kwargs={'company_pk':self.get_company(request).pk})
 
     def menu_url(self, request):
         return reverse(('%(site_name)s:' + self.menu_url_name) % {'site_name': self.site_name},

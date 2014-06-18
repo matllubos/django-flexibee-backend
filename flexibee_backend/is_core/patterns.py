@@ -1,15 +1,22 @@
+from django.core.urlresolvers import reverse
+
 from is_core.patterns import RestPattern, UIPattern
 
 
 class FlexibeePattern(object):
 
-    def _get_try_kwarg(self, obj):
-        kwargs = {'company_pk': obj.flexibee_company.pk}
-
-        if'(?P<pk>[-\w]+)' in self.url_pattern or '(?P<pk>\d+)' in self.url_pattern:
-            kwargs['pk'] = obj.pk
-
+    def get_kwargs(self, request):
+        kwargs = {}
+        if '(?P<company_pk>[-\w]+)' in self.url_prefix or '(?P<company_pk>[-\w]+)' in self.url_pattern:
+            kwargs['company_pk'] = request.kwargs['company_pk']
         return kwargs
+
+    def get_url_string(self, request, obj=None, kwargs=None):
+        kwargs = kwargs or {}
+        kwargs.update(self.get_kwargs(request))
+        if obj:
+            kwargs.update(self._get_try_kwarg(obj))
+        return reverse(self.pattern, kwargs=kwargs)
 
 
 class FlexibeeRestPattern(FlexibeePattern, RestPattern):
