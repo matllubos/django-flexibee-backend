@@ -41,7 +41,7 @@ class FlexibeeIsCore(UIRestModelISCore):
         return self.get_companies(request).exists()
 
     def init_request(self, request):
-        get_connection('flexibee').set_db_name(self.get_company(request).flexibee_db_name)
+        get_connection(config.FLEXIBEE_BACKEND_NAME).set_db_name(self.get_company(request).flexibee_db_name)
 
     def get_companies(self, request):
         raise NotImplemented
@@ -65,12 +65,11 @@ class FlexibeeIsCore(UIRestModelISCore):
         return reverse(self.get_api_url_name(), args=(self.get_company(request).pk,))
 
     def get_add_url(self, request):
-        return self.ui_patterns.get('add').get_url_string(kwargs={'company_pk':
-                                                                  self.get_company(request).pk})
+        return self.ui_patterns.get('add').get_url_string(request, kwargs={'company_pk': self.get_company(request).pk})
 
     def menu_url(self, request):
         return reverse(('%(site_name)s:' + self.menu_url_name) % {'site_name': self.site_name},
-                       kwargs={'company_pk': self.get_companies(request).first().pk})
+                       kwargs={'company_pk': self.get_company(request).pk})
 
     def get_menu_groups(self):
         return self.menu_parent_groups + [self.menu_group]

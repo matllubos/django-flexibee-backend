@@ -19,3 +19,9 @@ class FlexibeeDatabaseException(DatabaseError):
                 for error_dict in result.get('errors'):
                     errors.append(error_dict.get('message'))
         return '\n'.join(errors)
+
+
+class ChangesNotActivatedFlexibeeDatabaseException(FlexibeeDatabaseException):
+
+    def __init__(self, resp):
+        super(ChangesNotActivatedFlexibeeDatabaseException, self).__init__('Changes is not activated', resp)
