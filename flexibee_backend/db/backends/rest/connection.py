@@ -6,7 +6,8 @@ from django.utils.datastructures import SortedDict
 from django.template.defaultfilters import urlencode
 from django.utils.http import urlquote
 
-from flexibee_backend.db.backends.rest.exceptions import FlexibeeDatabaseException
+from flexibee_backend.db.backends.rest.exceptions import FlexibeeDatabaseException, \
+    ChangesNotActivatedFlexibeeDatabaseException
 
 
 def decimal_default(obj):
@@ -165,10 +166,30 @@ class Connector(object):
                 self.logger.info('Response %s, content: %s' % (r.status_code, force_text(r.text)))
 
     def file_response(self, table_name, id, type):
+        self._check_settings(table_name)
+
         url = self.URL % {'hostname': self.hostname, 'db_name': self.db_name,
                           'table_name': table_name, 'query_string': '', 'extra': '/%s' % id, 'type': type}
         r = requests.get(url, auth=(self.username, self.password))
         return r
+
+    def changes(self, start):
+        self._check_settings('changes')
+
+        url = self.URL % {'hostname': self.hostname, 'db_name': self.db_name, 'extra': '',
+                          'table_name': 'changes', 'query_string': 'start=%s' % start, 'type': 'json'}
+        r = requests.get(url, auth=(self.username, self.password))
+        if r.status_code not in [200, 404]:
+            self.logger.info('Response %s, content: %s' % (r.status_code, force_text(r.text)))
+            raise ChangesNotActivatedFlexibeeDatabaseException(r)
+        return int(r.json().get('winstrom').get('@globalVersion'))
+
+    def activate_changes(self):
+        self._check_settings('changes')
+
+        url = self.URL % {'hostname': self.hostname, 'db_name': self.db_name, 'extra': '',
+                          'table_name': 'changes/enable', 'query_string': '', 'type': 'json'}
+        r = requests.put(url, auth=(self.username, self.password))
 
     def reset(self):
         self.cache = {}

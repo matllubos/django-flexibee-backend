@@ -33,7 +33,7 @@ class FlexibeeIsCore(UIRestModelISCore):
         return self.get_companies(request).exists()
 
     def init_request(self, request):
-        get_connection('flexibee').set_db_name(self.get_company(request).flexibee_db_name)
+        get_connection(config.FLEXIBEE_BACKEND_NAME).set_db_name(self.get_company(request).flexibee_db_name)
 
     def get_companies(self, request):
         raise NotImplemented
