@@ -25,3 +25,7 @@ class ChangesNotActivatedFlexibeeDatabaseException(FlexibeeDatabaseException):
 
     def __init__(self, resp):
         super(ChangesNotActivatedFlexibeeDatabaseException, self).__init__('Changes is not activated', resp)
+
+
+class SyncException(FlexibeeDatabaseException):
+    pass
