@@ -134,9 +134,7 @@ class BackendQuery(NonrelQuery):
         self.db_query.add_filter(field.db_column or field.get_attname(), op, db_value, negated)
 
 
-class SQLCompiler(NonrelCompiler):
-    query_class = BackendQuery
-
+class SQLDataCompiler(object):
 
     def convert_filter_value_for_db(self, db_type, value):
         if value is None:
@@ -207,6 +205,10 @@ class SQLCompiler(NonrelCompiler):
             value = [self.convert_value_for_db(db_sub_type, subvalue)
                      for subvalue in value]
         return value
+
+
+class SQLCompiler(SQLDataCompiler, NonrelCompiler):
+    query_class = BackendQuery
 
     def execute_sql(self, result_type=MULTI):
         """

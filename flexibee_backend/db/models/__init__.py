@@ -16,13 +16,15 @@ class Company(models.Model):
     def save(self, *args, **kwargs):
         if not self.flexibee_db_name and self.FlexibeeMeta.db_name_slug_from_field is not None:
             admin_connector.create_company(self)
+        admin_connector.update_company(self)
         return super(Company, self).save(*args, **kwargs)
 
     class Meta:
         abstract = True
 
     class FlexibeeMeta:
-        mapping = {}
+        create_mapping = {}
+        update_mapping = {}
         db_name_slug_from_field = None
         readonly_fields = []
 
