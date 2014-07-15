@@ -6,18 +6,13 @@ from django.utils.translation import ugettext_lazy as _
 
 from flexibee_backend.db.backends.rest.utils import db_name_validator
 from flexibee_backend.db.backends.rest.admin_connection import admin_connector
+from flexibee_backend.db.backends.rest.exceptions import SyncException
 
 
 class Company(models.Model):
 
     flexibee_db_name = models.CharField(verbose_name=_('DB name'), null=False, blank=True, max_length=100,
                                         unique=True, validators=[db_name_validator])
-
-    def save(self, *args, **kwargs):
-        if not self.flexibee_db_name and self.FlexibeeMeta.db_name_slug_from_field is not None:
-            admin_connector.create_company(self)
-        admin_connector.update_company(self)
-        return super(Company, self).save(*args, **kwargs)
 
     class Meta:
         abstract = True

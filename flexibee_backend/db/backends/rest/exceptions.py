@@ -3,7 +3,11 @@ from django.db.utils import DatabaseError
 
 class FlexibeeDatabaseException(DatabaseError):
 
-    def __init__(self, msg, resp):
+    def __init__(self, msg, resp, url=None):
+        self.message = msg
+        self.url = url
+        if url:
+            msg = '%s %s ' % (url, msg)
         super(FlexibeeDatabaseException, self).__init__(msg)
         self.resp = resp
         self.json_data = resp.json().get('winstrom')
@@ -28,4 +32,8 @@ class ChangesNotActivatedFlexibeeDatabaseException(FlexibeeDatabaseException):
 
 
 class SyncException(FlexibeeDatabaseException):
-    pass
+
+    def __init__(self, msg, resp, url=None):
+        if not msg:
+            msg = 'Company synchronization error'
+        super(SyncException, self).__init__(msg, resp, url)

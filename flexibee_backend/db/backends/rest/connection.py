@@ -123,7 +123,7 @@ class Connector(object):
             return data
         else:
             self.logger.warning('Response %s, content: %s' % (r.status_code, force_text(r.text)))
-            raise FlexibeeDatabaseException('Rest GET method error', r)
+            raise FlexibeeDatabaseException('Rest GET method error', r, url)
 
     def write(self, table_name, data):
         self._check_settings(table_name)
@@ -143,7 +143,7 @@ class Connector(object):
             return r.json().get('winstrom')
         else:
             self.logger.warning('Response %s, content: %s' % (r.status_code, force_text(r.text)))
-            raise FlexibeeDatabaseException('Rest PUT method error', r)
+            raise FlexibeeDatabaseException('Rest PUT method error', r, url)
 
     def delete(self, table_name, data):
         self._check_settings(table_name)
@@ -161,7 +161,7 @@ class Connector(object):
             self._clear_table_cache(table_name)
             if r.status_code not in [200, 404]:
                 self.logger.info('Response %s, content: %s' % (r.status_code, force_text(r.text)))
-                raise FlexibeeDatabaseException('Rest DELETE method error', r)
+                raise FlexibeeDatabaseException('Rest DELETE method error', r, url)
             else:
                 self.logger.info('Response %s, content: %s' % (r.status_code, force_text(r.text)))
 
