@@ -13,6 +13,7 @@ from flexibee_backend.db.backends.rest.exceptions import SyncException
 from flexibee_backend import config
 from flexibee_backend.db.backends.rest.compiler import SQLDataCompiler
 from flexibee_backend.db.backends.rest.connection import decimal_default
+from django.utils.http import urlquote
 
 
 class FlexibeeAdminConnector(object):
@@ -57,15 +58,14 @@ class FlexibeeAdminConnector(object):
             return slugify(''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(10)))
         else:
             url = self.CREATE_URL % {'hostname': self.hostname}
-            data = {}
+            data = {'country': 'CZ'}
             for from_name, to_name in company.FlexibeeMeta.create_mapping.items():
                 data[to_name] = self._get_field_value(company, from_name)
 
-            query_string = '&'.join(['%s=%s' % (key, val) for key, val in data.items()])
+            query_string = '&'.join(['%s=%s' % (key, urlquote(val)) for key, val in data.items()])
 
             url += '?%s' % query_string
-
-            r = requests.post(url, auth=(self.username, self.password))
+            r = requests.put(url, auth=(self.username, self.password))
             if r.status_code == 201:
                 company.flexibee_db_name = r.headers['location'].split('/')[-1]
             else:
