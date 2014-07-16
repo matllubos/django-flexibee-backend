@@ -11,7 +11,7 @@ class DateFilter(DefaultFieldFilter):
 
     comparators = ['gt', 'lt', 'gte', 'lte']
 
-    def get_filter_term(self):
+    def get_filter_term(self, request):
         if '__' in self.filter_key:
             return super(DateTimeFilter, self).get_filter_term()
 
