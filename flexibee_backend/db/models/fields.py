@@ -32,6 +32,9 @@ class RemoteFile(object):
                                                                                  self.instance.pk, self.field.type)
         return HttpResponse(r.content, content_type=r.headers['content-type'])
 
+    def __unicode__(self):
+        return '.'.join((self.instance.pk, self.field.type)) if self.instance else None
+
 
 class RemoteFileDescriptor(object):
 
