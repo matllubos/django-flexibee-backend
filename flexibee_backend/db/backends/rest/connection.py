@@ -1,4 +1,5 @@
 import requests, json, logging, decimal
+import time
 
 from django.db.utils import DatabaseError
 from django.utils.encoding import force_text
@@ -77,7 +78,7 @@ class Connector(object):
                 return table_cache.get(key)
 
     def _clear_table_cache(self, table_name):
-        if table_name in self.cache:
+        if '__'.join((self.db_name, table_name)) in self.cache:
             del self.cache['__'.join((self.db_name, table_name))]
 
     def _add_to_cache(self, table_name, filters, fields, relations, ordering, offset, base, data):
@@ -252,7 +253,8 @@ class RestQuery(object):
     def get(self, offset=0, base=0, extra_fields=[]):
         fields = list(self.fields)
         fields += extra_fields
-        return self.connector.read(self.table_name, self.filters, fields, self.relations, self.order_fields, offset, base)
+        return self.connector.read(self.table_name, self.filters, fields, self.relations, self.order_fields, offset,
+                                   base)
 
     @property
     def db_name(self):
@@ -264,8 +266,8 @@ class RestQuery(object):
             return len(data.get(self.table_name))
         return int(data.get('@rowCount'))
 
-    def fetch(self, offset, base):
-        return self.get(offset, base or 0).get(self.table_name)
+    def fetch(self, offset, base, extra_fields=[]):
+        return self.get(offset, base or 0, extra_fields).get(self.table_name)
 
     def add_ordering(self, field_name, is_asc):
         self.order_fields.append('%s@%s' % (field_name, is_asc and 'A' or 'D'))
@@ -281,7 +283,7 @@ class RestQuery(object):
 
     def insert(self, data):
         if self._is_via():
-            self._store_via(data)
+            return self._store_via(data)
         else:
             output = self.connector.write(self.table_name, data)
             return output.get('results')[0].get('id')
@@ -294,21 +296,33 @@ class RestQuery(object):
             via_data = {'id': str(obj_data.get(self.via_fk_name))}
             via_data[self.via_relation_name] = [obj_data]
             store_view_db_query.update(via_data)
+            store_view_db_query.connector._clear_table_cache(self.table_name)
+            if 'id' in obj_data:
+                return obj_data['id']
+            else:
+                query = RestQuery(self.connector, self.table_name, ['id'])
+                query.add_filter(self.via_fk_name, '=', obj_data.get(self.via_fk_name), False)
+                # http://www.flexibee.eu/api/doc/ref/identifiers
+                query.add_ordering('id', False)
+                time.sleep(2)
+                return query.fetch(0, 1)[0].get('id')
 
     def _delete_via(self, data):
         for obj_data in data:
             store_view_db_query = RestQuery(self.connector, self.via_table_name, ['id'],
                                             [self.via_relation_name])
             store_view_db_query.add_filter('id', '=', obj_data.get(self.via_fk_name), False)
-            via_data = store_view_db_query.fetch(0, 0)[0]
+            via_data = store_view_db_query.fetch(0, 0, extra_fields=['%s(id)' % self.via_relation_name])[0]
             db_related_objs = via_data[self.via_relation_name]
 
             via_data[self.via_relation_name] = []
+            
             for relation_obj in db_related_objs:
                 if relation_obj.get('id') != str(obj_data.get('id')):
                     via_data[self.via_relation_name].append({'id': relation_obj.get('id')})
             via_data['%s@removeAll' % self.via_relation_name] = 'true'
             store_view_db_query.update(via_data)
+            store_view_db_query.connector._clear_table_cache(self.table_name)
 
     def update(self, data):
         updated_data = data
