@@ -29,5 +29,12 @@ class FlexibeeModel(models.Model):
     flexibee_company = CompanyForeignKey(config.FLEXIBEE_COMPANY_MODEL, null=True, blank=True, editable=False,
                                          on_delete=models.DO_NOTHING)
 
+
+    def attachements(self):
+        return
+
     class Meta:
         abstract = True
+
+    class FlexibeeMeta:
+        readonly_fields = []

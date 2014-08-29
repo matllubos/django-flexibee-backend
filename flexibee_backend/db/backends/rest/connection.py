@@ -283,12 +283,12 @@ class RestQuery(object):
 
     def insert(self, data):
         if self._is_via():
-            return self._store_via(data)
+            return self._store_via_table(data)
         else:
             output = self.connector.write(self.table_name, data)
             return output.get('results')[0].get('id')
 
-    def _store_via(self, data):
+    def _store_via_table(self, data):
         for obj_data in data:
             store_view_db_query = RestQuery(self.connector, self.via_table_name, ['id'],
                                             [self.via_relation_name])
@@ -304,8 +304,9 @@ class RestQuery(object):
                 query.add_filter(self.via_fk_name, '=', obj_data.get(self.via_fk_name), False)
                 # http://www.flexibee.eu/api/doc/ref/identifiers
                 query.add_ordering('id', False)
-                time.sleep(2)
                 return query.fetch(0, 1)[0].get('id')
+            
+    def _store_attachment(self, data):
 
     def _delete_via(self, data):
         for obj_data in data:
@@ -316,7 +317,7 @@ class RestQuery(object):
             db_related_objs = via_data[self.via_relation_name]
 
             via_data[self.via_relation_name] = []
-            
+
             for relation_obj in db_related_objs:
                 if relation_obj.get('id') != str(obj_data.get('id')):
                     via_data[self.via_relation_name].append({'id': relation_obj.get('id')})
@@ -338,7 +339,7 @@ class RestQuery(object):
             data.append(updated_data)
 
         if self._is_via():
-            self._store_via(data)
+            self._store_via_table(data)
         else:
             self.connector.write(self.table_name, data)
             return len(data)

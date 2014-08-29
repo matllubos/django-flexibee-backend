@@ -36,6 +36,26 @@ class RemoteFile(object):
         return '.'.join((self.instance.pk, self.field.type)) if self.instance else None
 
 
+class Attachment(object):
+
+    def __init__(self, instance, pk):
+        self.instance = instance
+        self.pk = pk
+
+    @property
+    def file_response(self):
+        if not self.instance.pk:
+            raise AttributeError('The object musth have set id.')
+
+        r = get_connection(config.FLEXIBEE_BACKEND_NAME).connector.get_attachement_content(self.instance._meta.db_table,
+                                                                                           self.instance.pk, self.pk)
+        return HttpResponse(r.content, content_type=r.headers['content-type'])
+
+
+class Attachements(list):
+    pass
+
+
 class RemoteFileDescriptor(object):
 
     def __init__(self, field):
@@ -55,6 +75,25 @@ class RemoteFileDescriptor(object):
         instance.__dict__[self.field.name] = value
 
 
+class AttachementsDescriptor(object):
+
+    def __init__(self, field):
+        self.field = field
+
+    def __get__(self, instance=None, owner=None):
+        if instance is None:
+            raise AttributeError(
+                'The "%s" attribute can only be accessed from %s instances.'
+                % (self.field.name, owner.__name__))
+
+        attr = AttachementsDescriptor(instance, self.field)
+        instance.__dict__[self.field.name] = attr
+        return instance.__dict__[self.field.name]
+
+    def __set__(self, instance, value):
+        instance.__dict__[self.field.name] = value
+
+
 class RemoteFileField(Field):
 
     def __init__(self, verbose_name=None, name=None, type=None, **kwargs):
@@ -64,3 +103,10 @@ class RemoteFileField(Field):
     def contribute_to_class(self, cls, name):
         super(RemoteFileField, self).contribute_to_class(cls, name)
         setattr(cls, self.name, RemoteFileDescriptor(self))
+
+
+class AttachmentsField(Field):
+
+    def contribute_to_class(self, cls, name):
+        super(AttachmentsField, self).contribute_to_class(cls, name)
+        setattr(cls, self.name, AttachementsDescriptor(self))
