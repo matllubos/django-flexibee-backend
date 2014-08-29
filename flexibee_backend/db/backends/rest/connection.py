@@ -174,6 +174,35 @@ class Connector(object):
         r = requests.get(url, auth=(self.username, self.password))
         return r
 
+    def get_attachements(self, table_name, id):
+        self._check_settings(table_name)
+        url = self.URL % {'hostname': self.hostname, 'db_name': self.db_name,
+                          'table_name': table_name, 'query_string': '', 'extra': '/%s/prilohy' % id, 'type': 'json'}
+        r = requests.get(url, auth=(self.username, self.password))
+        return r.json().get('winstrom').get('priloha')
+
+    def get_attachement_content(self, table_name, id, attachement_id):
+        url = 'https://%(hostname)s/c/%(db_name)s/%(table_name)s/%(id)s/prilohy/%(attachement_id)s/content'
+        self._check_settings(table_name)
+        url = url % {'hostname': self.hostname, 'db_name': self.db_name,
+                     'table_name': table_name, 'id': id, 'attachement_id': attachement_id}
+        requests.get(url, auth=(self.username, self.password))
+        
+    def create_attachement(self, table_name, id, filename, file):
+        url = 'https://%(hostname)s/c/%(db_name)s/%(table_name)s/%(id)s/prilohy/new/%(filename)s'
+        self._check_settings(table_name)
+        url = url % {'hostname': self.hostname, 'db_name': self.db_name,
+                     'table_name': table_name, 'id': id, 'filename': filename}
+        headers = {'content-type': 'image/png'}
+        requests.put(url, files={'file':file}, headers=headers, auth=(self.username, self.password))
+    
+    def delete_attachement(self, table_name, id, attachement_id):
+        url = 'https://%(hostname)s/c/%(db_name)s/%(table_name)s/%(id)s/prilohy/%(attachement_id)s.json'
+        self._check_settings(table_name)
+        url = url % {'hostname': self.hostname, 'db_name': self.db_name,
+                     'table_name': table_name, 'id': id, 'attachement_id': attachement_id}
+        requests.delete(url, auth=(self.username, self.password))
+        
     def changes(self, start):
         self._check_settings('changes')
 
@@ -283,12 +312,12 @@ class RestQuery(object):
 
     def insert(self, data):
         if self._is_via():
-            return self._store_via_table(data)
+            return self._store_via(data)
         else:
             output = self.connector.write(self.table_name, data)
             return output.get('results')[0].get('id')
 
-    def _store_via_table(self, data):
+    def _store_via(self, data):
         for obj_data in data:
             store_view_db_query = RestQuery(self.connector, self.via_table_name, ['id'],
                                             [self.via_relation_name])
@@ -305,8 +334,6 @@ class RestQuery(object):
                 # http://www.flexibee.eu/api/doc/ref/identifiers
                 query.add_ordering('id', False)
                 return query.fetch(0, 1)[0].get('id')
-            
-    def _store_attachment(self, data):
 
     def _delete_via(self, data):
         for obj_data in data:
@@ -339,7 +366,7 @@ class RestQuery(object):
             data.append(updated_data)
 
         if self._is_via():
-            self._store_via_table(data)
+            self._store_via(data)
         else:
             self.connector.write(self.table_name, data)
             return len(data)

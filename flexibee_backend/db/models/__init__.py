@@ -7,6 +7,7 @@ from django.utils.translation import ugettext_lazy as _
 from flexibee_backend.db.backends.rest.utils import db_name_validator
 from flexibee_backend.db.backends.rest.admin_connection import admin_connector
 from flexibee_backend.db.backends.rest.exceptions import SyncException
+from flexibee_backend.db.models.fields import AttachmentsField
 
 
 class Company(models.Model):
@@ -28,10 +29,7 @@ class FlexibeeModel(models.Model):
 
     flexibee_company = CompanyForeignKey(config.FLEXIBEE_COMPANY_MODEL, null=True, blank=True, editable=False,
                                          on_delete=models.DO_NOTHING)
-
-
-    def attachements(self):
-        return
+    attachements = AttachmentsField(_('Attachments'))
 
     class Meta:
         abstract = True

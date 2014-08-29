@@ -15,6 +15,7 @@ from .connection import RestQuery
 
 from flexibee_backend.db.models import StoreViaForeignKey, CompanyForeignKey, RemoteFileField
 from django.utils.encoding import force_text
+from flexibee_backend.db.models.fields import AttachmentsField
 
 # TODO: Change this to match your DB
 # Valid query types (a dictionary is used for speedy lookups).
@@ -32,7 +33,7 @@ OPERATORS_MAP = {
     'endswith': 'ends',
 }
 
-DEFAULT_READONLY_FIELD_CLASSES = (RemoteFileField,)
+DEFAULT_READONLY_FIELD_CLASSES = (RemoteFileField, AttachmentsField)
 
 
 def get_field_db_name(field):
@@ -91,7 +92,7 @@ class BackendQuery(NonrelQuery):
                 db_field_name = get_field_db_name(field)
                 if db_field_name == 'flexibee_company_id':
                     output[db_field_name] = field.rel.to._default_manager.get(flexibee_db_name=self.db_query.db_name).pk
-                elif isinstance(field, RemoteFileField):
+                elif isinstance(field, (RemoteFileField, AttachmentsField)):
                     pass
                 else:
                     output[db_field_name] = self.compiler.convert_value_from_db(field.get_internal_type(),
