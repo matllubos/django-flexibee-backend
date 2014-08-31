@@ -14,14 +14,22 @@ from is_core.generic_views.form_views import AddModelFormView, EditModelFormView
 from is_core.generic_views.exceptions import SaveObjectException
 from is_core.actions import WebAction
 
-from flexibee_backend.is_core.patterns import FlexibeeRestPattern, FlexibeeUIPattern, FlexibeePattern
+from flexibee_backend.is_core.patterns import (FlexibeeRestPattern, FlexibeeUIPattern, FlexibeePattern,
+                                               AttachementsFlexibeeUIPattern)
 from flexibee_backend import config
 from flexibee_backend.db.backends.rest.exceptions import FlexibeeDatabaseException
+from flexibee_backend.is_core.views import AttachmentFileView
 
 
 class FlexibeeIsCore(UIRestModelISCore):
     abstract = True
     default_ui_pattern_class = FlexibeePattern
+
+    def get_view_classes(self):
+        view_classes = super(FlexibeeIsCore, self).get_view_classes()
+        view_classes['attachement'] = (r'^/(?P<pk>[-\w]+)/attachement/(?P<attachement_pk>[-\w]+)$', AttachmentFileView,
+                                       AttachementsFlexibeeUIPattern)
+        return view_classes
 
     def save_model(self, request, obj, form, change):
         try:

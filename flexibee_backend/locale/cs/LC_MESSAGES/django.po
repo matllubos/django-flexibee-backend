@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2014-04-10 12:30+0200\n"
+"POT-Creation-Date: 2014-08-31 15:58-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -23,6 +23,18 @@ msgstr ""
 msgid "DB name %s does not exists"
 msgstr "DB s názvem %s neexistuje"
 
-#: db/models/__init__.py:12
+#: db/forms/__init__.py:33
+msgid "New attachement"
+msgstr "Nová příloha"
+
+#: db/forms/__init__.py:34
+msgid "Remove attachements"
+msgstr "Odstranit přílohy"
+
+#: db/models/__init__.py:16
 msgid "DB name"
 msgstr "Název databáze"
+
+#: db/models/__init__.py:33
+msgid "Attachments"
+msgstr "Přílohy"

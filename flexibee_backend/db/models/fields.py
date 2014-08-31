@@ -1,12 +1,10 @@
-from django.db.models.fields.related import ForeignKey, ManyToManyField
-from django.db.transaction import get_connection
+from django.db.models.fields.related import ForeignKey
 from django.db.models.fields import Field
-
+from django.core.exceptions import ObjectDoesNotExist
 from django.http.response import HttpResponse
 
-from flexibee_backend import config
-from flexibee_backend.db import fields as flexibee_fields
-from django.forms.models import ModelForm
+from flexibee_backend.db.utils import get_connector, MODEL_CONNECTOR, ATTACHEMENT_CONNECTOR
+
 
 class CompanyForeignKey(ForeignKey):
     pass
@@ -29,22 +27,23 @@ class RemoteFile(object):
         if not self.instance.pk:
             raise AttributeError('The object musth have set id.')
 
-        r = get_connection(config.FLEXIBEE_BACKEND_NAME).connector.file_response(self.instance._meta.db_table,
-                                                                                 self.instance.pk, self.field.type)
+        connector = get_connector(MODEL_CONNECTOR, self.instance.flexibee_company.flexibee_db_name)
+        r = connector.get_response(self.instance._meta.db_table, self.instance.pk, self.field.type)
         return HttpResponse(r.content, content_type=r.headers['content-type'])
 
     def __unicode__(self):
         return '.'.join((self.instance.pk, self.field.type)) if self.instance else None
 
 
-class Attachment(object):
+class Attachement(object):
 
-    def __init__(self, filename=None, pk=None, file=None, content_type=None, instance=None):
+    def __init__(self, filename, content_type, file=None, pk=None, instance=None, connector=None):
         self.filename = filename
         self.pk = pk
         self.file = file
         self.content_type = content_type
         self.instance = instance
+        self.connector = connector
 
     def __unicode__(self):
         return self.filename
@@ -53,41 +52,52 @@ class Attachment(object):
         return self.filename
 
     def delete(self):
-        print self.instance
         if not self.instance:
-            raise AttributeError('The %s attachement can only be deleted from instances.' % (self.filename))
-        get_connection(config.FLEXIBEE_BACKEND_NAME).connector.delete_attachement(self.instance._meta.db_table,
-                                                                                  self.instance.pk, self.pk)
+            raise AttributeError('The %s attachement must be firstly stored.' % (self.filename))
+        connector = get_connector(ATTACHEMENT_CONNECTOR, self.instance.flexibee_company.flexibee_db_name)
+        connector.delete(self.instance._meta.db_table, self.instance.pk, self.pk)
 
     @property
     def file_response(self):
         if not self.instance:
-            raise AttributeError('The object musth have set id.')
+            raise AttributeError('The %s attachement must be firstly stored.' % (self.filename))
 
-        r = get_connection(config.FLEXIBEE_BACKEND_NAME).connector.get_attachement_content(self.instance._meta.db_table,
-                                                                                           self.instance.pk, self.pk)
+        connector = get_connector(ATTACHEMENT_CONNECTOR, self.instance.flexibee_company.flexibee_db_name)
+        r = connector.get_response(self.instance._meta.db_table, self.instance.pk, self.pk)
         return HttpResponse(r.content, content_type=r.headers['content-type'])
 
 
 class Attachements(object):
-    
+
     def __init__(self, instance):
         self.instance = instance
+        self.connector = get_connector(ATTACHEMENT_CONNECTOR, self.instance.flexibee_company.flexibee_db_name)
 
     def all(self):
-        data = get_connection(config.FLEXIBEE_BACKEND_NAME).connector.get_attachements(self.instance._meta.db_table,
-                                                                                                   self.instance.pk)
+        data = self.connector.read(self.instance._meta.db_table, self.instance.pk)
+
         attachement_list = []
         for attachement_data in data:
-            attachement = Attachment(filename=attachement_data.get('nazSoub'), pk=attachement_data.get('id'),
-                                               content_type=attachement_data.get('contentType'), instance=self.instance)
+            attachement = Attachement(attachement_data.get('nazSoub'), attachement_data.get('contentType'),
+                                      pk=attachement_data.get('id'), instance=self.instance,
+                                      connector=self.connector)
             attachement_list.append(attachement)
         return attachement_list
-        
-    def add(self, attachement):
-        get_connection(config.FLEXIBEE_BACKEND_NAME).connector.create_attachement(self.instance._meta.db_table,
-                                                                                  self.instance.pk, attachement.filename, 
-                                                                                  attachement.file)
+
+    def create(self, attachement):
+        if not attachement.file:
+            raise AttributeError('New %s attachement must have set file.' % (self.filename))
+
+        self.connector.write(self.instance._meta.db_table, self.instance.pk, attachement.filename, attachement.file,
+                             attachement.content_type)
+
+    def get(self, pk):
+        data = self.connector.read(self.instance._meta.db_table, self.instance.pk, pk)
+        if not data:
+            raise ObjectDoesNotExist
+        data = data[0]
+        return Attachement(data.get('nazSoub'), data.get('contentType'), pk=data.get('id'),
+                           instance=self.instance, connector=self.connector)
 
 
 class RemoteFileDescriptor(object):
@@ -144,16 +154,6 @@ class AttachmentsField(Field):
     def contribute_to_class(self, cls, name):
         super(AttachmentsField, self).contribute_to_class(cls, name)
         setattr(cls, self.name, AttachementsDescriptor(self))
-        
+
     def formfield(self, **kwargs):
-        print kwargs
-        defaults = {'form_class': flexibee_fields.AttachementsField, 'atachement_manager': AttachementsDescriptor(self)}
-        defaults.update(kwargs)
-        return super(AttachmentsField, self).formfield(**defaults)
-    
-    def value_from_object(self, obj):
-        """
-        Returns the value of this field in the given model instance.
-        """
-        return getattr(obj, self.attname)
-    
+        return None

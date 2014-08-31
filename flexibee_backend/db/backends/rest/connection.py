@@ -17,7 +17,7 @@ def decimal_default(obj):
     raise TypeError
 
 
-class Connector(object):
+class BaseConnector(object):
 
     URL = 'https://%(hostname)s/c/%(db_name)s/%(table_name)s%(extra)s.%(type)s?%(query_string)s'
     logger = logging.getLogger('flexibee-backend')
@@ -26,13 +26,25 @@ class Connector(object):
         self.username = username
         self.password = password
         self.hostname = hostname
-        self.cache = {}
-        self.waiting_writes = SortedDict()
         self.db_name = None
 
     def _check_settings(self, table_name):
         if self.db_name is None:
             raise DatabaseError('For flexibee DB connector must be set company: %s' % table_name)
+
+    def _serialize(self, data):
+        return json.dumps(data, default=decimal_default)
+
+    def reset(self):
+        self.db_name = None
+
+
+class ModelConnector(BaseConnector):
+
+    def __init__(self, username, password, hostname):
+        super(ModelConnector, self).__init__(username, password, hostname)
+        self.cache = {}
+        self.waiting_writes = SortedDict()
 
     def _is_request_for_one_object(self, filters):
         return len(filters) == 1 and filters[0].field == 'id' and filters[0].op == '=' and not filters[0].negated
@@ -87,9 +99,6 @@ class Connector(object):
                                                                                  {})
         key = self._generate_key(filters, fields, relations, ordering, offset, base)
         table_cache[key] = data
-
-    def _serialize(self, data):
-        return json.dumps(data, default=decimal_default)
 
     def read(self, table_name, filters, fields, relations, ordering, offset, base):
         self._check_settings(table_name)
@@ -166,43 +175,13 @@ class Connector(object):
             else:
                 self.logger.info('Response %s, content: %s' % (r.status_code, force_text(r.text)))
 
-    def file_response(self, table_name, id, type):
+    def get_response(self, table_name, id, type):
         self._check_settings(table_name)
 
         url = self.URL % {'hostname': self.hostname, 'db_name': self.db_name,
                           'table_name': table_name, 'query_string': '', 'extra': '/%s' % id, 'type': type}
-        r = requests.get(url, auth=(self.username, self.password))
-        return r
+        return requests.get(url, auth=(self.username, self.password))
 
-    def get_attachements(self, table_name, id):
-        self._check_settings(table_name)
-        url = self.URL % {'hostname': self.hostname, 'db_name': self.db_name,
-                          'table_name': table_name, 'query_string': '', 'extra': '/%s/prilohy' % id, 'type': 'json'}
-        r = requests.get(url, auth=(self.username, self.password))
-        return r.json().get('winstrom').get('priloha')
-
-    def get_attachement_content(self, table_name, id, attachement_id):
-        url = 'https://%(hostname)s/c/%(db_name)s/%(table_name)s/%(id)s/prilohy/%(attachement_id)s/content'
-        self._check_settings(table_name)
-        url = url % {'hostname': self.hostname, 'db_name': self.db_name,
-                     'table_name': table_name, 'id': id, 'attachement_id': attachement_id}
-        requests.get(url, auth=(self.username, self.password))
-        
-    def create_attachement(self, table_name, id, filename, file):
-        url = 'https://%(hostname)s/c/%(db_name)s/%(table_name)s/%(id)s/prilohy/new/%(filename)s'
-        self._check_settings(table_name)
-        url = url % {'hostname': self.hostname, 'db_name': self.db_name,
-                     'table_name': table_name, 'id': id, 'filename': filename}
-        headers = {'content-type': 'image/png'}
-        requests.put(url, files={'file':file}, headers=headers, auth=(self.username, self.password))
-    
-    def delete_attachement(self, table_name, id, attachement_id):
-        url = 'https://%(hostname)s/c/%(db_name)s/%(table_name)s/%(id)s/prilohy/%(attachement_id)s.json'
-        self._check_settings(table_name)
-        url = url % {'hostname': self.hostname, 'db_name': self.db_name,
-                     'table_name': table_name, 'id': id, 'attachement_id': attachement_id}
-        requests.delete(url, auth=(self.username, self.password))
-        
     def changes(self, start):
         self._check_settings('changes')
 
@@ -222,8 +201,51 @@ class Connector(object):
         r = requests.put(url, auth=(self.username, self.password))
 
     def reset(self):
-        self.cache = {}
+        super(ModelConnector, self).reset()
         self.db_name = None
+
+
+class AttachementConnector(BaseConnector):
+
+    def read(self, table_name, id, attachement_id=None):
+        self._check_settings(table_name)
+
+        extra = '/%s/prilohy' % id
+        if attachement_id:
+            extra = '/'.join((extra, str(attachement_id)))
+
+        url = self.URL % {'hostname': self.hostname, 'db_name': self.db_name,
+                          'table_name': table_name, 'query_string': 'detail=custom:id,contentType,nazSoub,contentType',
+                          'extra': extra, 'type': 'json'}
+        r = requests.get(url, auth=(self.username, self.password))
+        return r.json().get('winstrom').get('priloha')
+
+    def write(self, table_name, id, filename, file, content_type):
+        self._check_settings(table_name)
+
+        url = 'https://%(hostname)s/c/%(db_name)s/%(table_name)s/%(id)s/prilohy/new/%(filename)s'
+        self._check_settings(table_name)
+        url = url % {'hostname': self.hostname, 'db_name': self.db_name,
+                     'table_name': table_name, 'id': id, 'filename': filename}
+        headers = {'content-type': content_type}
+        requests.put(url, files={'file':file}, headers=headers, auth=(self.username, self.password))
+
+    def delete(self, table_name, id, attachement_id):
+        self._check_settings(table_name)
+
+        url = 'https://%(hostname)s/c/%(db_name)s/%(table_name)s/%(id)s/prilohy/%(attachement_id)s.json'
+        self._check_settings(table_name)
+        url = url % {'hostname': self.hostname, 'db_name': self.db_name,
+                     'table_name': table_name, 'id': id, 'attachement_id': attachement_id}
+        requests.delete(url, auth=(self.username, self.password))
+
+    def get_response(self, table_name, id, attachement_id):
+        self._check_settings(table_name)
+
+        url = 'https://%(hostname)s/c/%(db_name)s/%(table_name)s/%(id)s/prilohy/%(attachement_id)s/content'
+        url = url % {'hostname': self.hostname, 'db_name': self.db_name,
+                     'table_name': table_name, 'id': id, 'attachement_id': attachement_id}
+        return requests.get(url, auth=(self.username, self.password))
 
 
 class Filter(object):

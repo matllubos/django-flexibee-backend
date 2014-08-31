@@ -25,3 +25,7 @@ class FlexibeeRestPattern(FlexibeePattern, RestPattern):
 
 class FlexibeeUIPattern(FlexibeePattern, UIPattern):
     pass
+
+
+class AttachementsFlexibeeUIPattern(FlexibeeUIPattern):
+    send_in_rest = False
