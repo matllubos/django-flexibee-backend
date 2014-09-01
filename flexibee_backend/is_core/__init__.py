@@ -65,7 +65,8 @@ class FlexibeeIsCore(UIRestModelISCore):
         return reverse(self.get_api_url_name(), args=(self.get_company(request).pk,))
 
     def get_add_url(self, request):
-        return self.ui_patterns.get('add').get_url_string(request, kwargs={'company_pk':self.get_company(request).pk})
+        if 'add' in self.ui_patterns:
+            return self.ui_patterns.get('add').get_url_string(request, kwargs={'company_pk':self.get_company(request).pk})
 
     def menu_url(self, request):
         return reverse(('%(site_name)s:' + self.menu_url_name) % {'site_name': self.site_name},
