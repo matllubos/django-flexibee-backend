@@ -205,14 +205,14 @@ class ModelConnector(BaseConnector):
         self.db_name = None
 
 
-class AttachementConnector(BaseConnector):
+class AttachmentConnector(BaseConnector):
 
-    def read(self, table_name, id, attachement_id=None):
+    def read(self, table_name, id, attachment_id=None):
         self._check_settings(table_name)
 
         extra = '/%s/prilohy' % id
-        if attachement_id:
-            extra = '/'.join((extra, str(attachement_id)))
+        if attachment_id:
+            extra = '/'.join((extra, str(attachment_id)))
 
         url = self.URL % {'hostname': self.hostname, 'db_name': self.db_name,
                           'table_name': table_name, 'query_string': 'detail=custom:id,contentType,nazSoub,contentType',
@@ -230,21 +230,21 @@ class AttachementConnector(BaseConnector):
         headers = {'content-type': content_type}
         requests.put(url, files={'file':file}, headers=headers, auth=(self.username, self.password))
 
-    def delete(self, table_name, id, attachement_id):
+    def delete(self, table_name, id, attachment_id):
         self._check_settings(table_name)
 
-        url = 'https://%(hostname)s/c/%(db_name)s/%(table_name)s/%(id)s/prilohy/%(attachement_id)s.json'
+        url = 'https://%(hostname)s/c/%(db_name)s/%(table_name)s/%(id)s/prilohy/%(attachment_id)s.json'
         self._check_settings(table_name)
         url = url % {'hostname': self.hostname, 'db_name': self.db_name,
-                     'table_name': table_name, 'id': id, 'attachement_id': attachement_id}
+                     'table_name': table_name, 'id': id, 'attachment_id': attachment_id}
         requests.delete(url, auth=(self.username, self.password))
 
-    def get_response(self, table_name, id, attachement_id):
+    def get_response(self, table_name, id, attachment_id):
         self._check_settings(table_name)
 
-        url = 'https://%(hostname)s/c/%(db_name)s/%(table_name)s/%(id)s/prilohy/%(attachement_id)s/content'
+        url = 'https://%(hostname)s/c/%(db_name)s/%(table_name)s/%(id)s/prilohy/%(attachment_id)s/content'
         url = url % {'hostname': self.hostname, 'db_name': self.db_name,
-                     'table_name': table_name, 'id': id, 'attachement_id': attachement_id}
+                     'table_name': table_name, 'id': id, 'attachment_id': attachment_id}
         return requests.get(url, auth=(self.username, self.password))
 
 

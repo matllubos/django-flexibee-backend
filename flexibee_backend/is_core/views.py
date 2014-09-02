@@ -13,6 +13,6 @@ class AttachmentFileView(DefaultCoreViewMixin, View):
 
     def get(self, request, *args, **kwargs):
         try:
-            return self.get_obj().attachements.get(self.request.kwargs.get('attachement_pk')).file_response
+            return self.get_obj().attachments.get(self.request.kwargs.get('attachment_pk')).file_response
         except ObjectDoesNotExist:
             raise Http404

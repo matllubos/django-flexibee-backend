@@ -1,10 +1,11 @@
 from django.utils.translation import ugettext_lazy as _
 from django import forms
 from django.utils.safestring import mark_safe
+from django.utils.http import urlquote
 
 from is_core.forms import RestModelForm
 
-from flexibee_backend.db.models.fields import Attachement
+from flexibee_backend.db.models.fields import Attachment
 
 
 class PostM2MFormMixin(object):
@@ -28,28 +29,28 @@ class PostM2MFormMixin(object):
         return obj
 
 
-class FlexibeeAttachementsModelForm(PostM2MFormMixin, RestModelForm):
+class FlexibeeAttachmentsModelForm(PostM2MFormMixin, RestModelForm):
 
-    new_attachement = forms.FileField(label=_('New attachement'), required=False)
-    existing_attachements = forms.MultipleChoiceField(label=_('Remove attachements'), choices=((1, 'a'), (2, 'b')),
-                                                      widget=forms.CheckboxSelectMultiple, required=False)
+    new_attachment = forms.FileField(label=_('New attachment'), required=False)
+    existing_attachments = forms.MultipleChoiceField(label=_('Remove attachments'), choices=((1, 'a'), (2, 'b')),
+                                                     widget=forms.CheckboxSelectMultiple, required=False)
 
     def __init__(self, *args, **kwargs):
-        super(FlexibeeAttachementsModelForm, self).__init__(*args, **kwargs)
-        self.fields['existing_attachements'].choices = [(attachement.pk, mark_safe('<a href="%s">%s</a>' %
-                                                                                   (self.attachement_url(attachement),
-                                                                                    attachement.filename)))
-                                                        for attachement in self.instance.attachements.all()]
+        super(FlexibeeAttachmentsModelForm, self).__init__(*args, **kwargs)
+        self.fields['existing_attachments'].choices = [(attachment.pk, mark_safe('<a href="%s">%s</a>' %
+                                                                                 (self.attachment_url(attachment),
+                                                                                  attachment.filename)))
+                                                        for attachment in self.instance.attachments.all()]
 
-    def attachement_url(self, attachement):
-        return 'attachement/%s' % attachement.pk
+    def attachment_url(self, attachment):
+        return 'attachment/%s__%s' % (attachment.pk, urlquote(attachment.filename))
 
     def post_save(self):
-        for attachement in self.instance.attachements.all():
-            if str(attachement.pk) in self.cleaned_data['existing_attachements']:
-                attachement.delete()
+        for attachment in self.instance.attachments.all():
+            if str(attachment.pk) in self.cleaned_data['existing_attachments']:
+                attachment.delete()
 
-        new_attachement = self.cleaned_data.get('new_attachement')
-        if new_attachement:
-            file = self.files.get('%s-new_attachement' % self.prefix)
-            self.instance.attachements.create(Attachement(file.name, file.content_type, file=file.file))
+        new_attachment = self.cleaned_data.get('new_attachment')
+        if new_attachment:
+            file = self.files.get('%s-new_attachment' % self.prefix)
+            self.instance.attachments.create(Attachment(file.name, file.content_type, file=file.file))

@@ -15,7 +15,7 @@ from is_core.generic_views.exceptions import SaveObjectException
 from is_core.actions import WebAction
 
 from flexibee_backend.is_core.patterns import (FlexibeeRestPattern, FlexibeeUIPattern, FlexibeePattern,
-                                               AttachementsFlexibeeUIPattern)
+                                               AttachmentsFlexibeeUIPattern)
 from flexibee_backend import config
 from flexibee_backend.db.backends.rest.exceptions import FlexibeeDatabaseException
 from flexibee_backend.is_core.views import AttachmentFileView
@@ -27,8 +27,8 @@ class FlexibeeIsCore(UIRestModelISCore):
 
     def get_view_classes(self):
         view_classes = super(FlexibeeIsCore, self).get_view_classes()
-        view_classes['attachement'] = (r'^/(?P<pk>[-\w]+)/attachement/(?P<attachement_pk>[-\w]+)$', AttachmentFileView,
-                                       AttachementsFlexibeeUIPattern)
+        view_classes['attachment'] = (r'^/(?P<pk>[-\w]+)/attachment/(?P<attachment_pk>[-\d]+)__(?P<attachment_name>.+)$', 
+                                      AttachmentFileView, AttachmentsFlexibeeUIPattern)
         return view_classes
 
     def save_model(self, request, obj, form, change):

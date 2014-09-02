@@ -1,11 +1,11 @@
 from django.db.transaction import get_connection
 
 from flexibee_backend import config
-from flexibee_backend.db.backends.rest.connection import ModelConnector, AttachementConnector
+from flexibee_backend.db.backends.rest.connection import ModelConnector, AttachmentConnector
 from django.conf import settings
 
 MODEL_CONNECTOR = ModelConnector
-ATTACHEMENT_CONNECTOR = AttachementConnector
+ATTACHMENT_CONNECTOR = AttachmentConnector
 
 
 def set_db_name(db_name, backend_name=config.FLEXIBEE_BACKEND_NAME):

@@ -3,7 +3,7 @@ from django.db.models.fields import Field
 from django.core.exceptions import ObjectDoesNotExist
 from django.http.response import HttpResponse
 
-from flexibee_backend.db.utils import get_connector, MODEL_CONNECTOR, ATTACHEMENT_CONNECTOR
+from flexibee_backend.db.utils import get_connector, MODEL_CONNECTOR, ATTACHMENT_CONNECTOR
 
 
 class CompanyForeignKey(ForeignKey):
@@ -35,7 +35,7 @@ class RemoteFile(object):
         return '.'.join((self.instance.pk, self.field.type)) if self.instance else None
 
 
-class Attachement(object):
+class Attachment(object):
 
     def __init__(self, filename, content_type, file=None, pk=None, instance=None, connector=None):
         self.filename = filename
@@ -53,51 +53,51 @@ class Attachement(object):
 
     def delete(self):
         if not self.instance:
-            raise AttributeError('The %s attachement must be firstly stored.' % (self.filename))
-        connector = get_connector(ATTACHEMENT_CONNECTOR, self.instance.flexibee_company.flexibee_db_name)
+            raise AttributeError('The %s attachment must be firstly stored.' % (self.filename))
+        connector = get_connector(ATTACHMENT_CONNECTOR, self.instance.flexibee_company.flexibee_db_name)
         connector.delete(self.instance._meta.db_table, self.instance.pk, self.pk)
 
     @property
     def file_response(self):
         if not self.instance:
-            raise AttributeError('The %s attachement must be firstly stored.' % (self.filename))
+            raise AttributeError('The %s attachment must be firstly stored.' % (self.filename))
 
-        connector = get_connector(ATTACHEMENT_CONNECTOR, self.instance.flexibee_company.flexibee_db_name)
+        connector = get_connector(ATTACHMENT_CONNECTOR, self.instance.flexibee_company.flexibee_db_name)
         r = connector.get_response(self.instance._meta.db_table, self.instance.pk, self.pk)
         return HttpResponse(r.content, content_type=r.headers['content-type'])
 
 
-class Attachements(object):
+class Attachments(object):
 
     def __init__(self, instance):
         self.instance = instance
-        self.connector = get_connector(ATTACHEMENT_CONNECTOR, self.instance.flexibee_company.flexibee_db_name)
+        self.connector = get_connector(ATTACHMENT_CONNECTOR, self.instance.flexibee_company.flexibee_db_name)
 
     def all(self):
         data = self.connector.read(self.instance._meta.db_table, self.instance.pk)
 
-        attachement_list = []
-        for attachement_data in data:
-            attachement = Attachement(attachement_data.get('nazSoub'), attachement_data.get('contentType'),
-                                      pk=attachement_data.get('id'), instance=self.instance,
-                                      connector=self.connector)
-            attachement_list.append(attachement)
-        return attachement_list
+        attachment_list = []
+        for attachment_data in data:
+            attachment = Attachment(attachment_data.get('nazSoub'), attachment_data.get('contentType'),
+                                    pk=attachment_data.get('id'), instance=self.instance,
+                                    connector=self.connector)
+            attachment_list.append(attachment)
+        return attachment_list
 
-    def create(self, attachement):
-        if not attachement.file:
-            raise AttributeError('New %s attachement must have set file.' % (self.filename))
+    def create(self, attachment):
+        if not attachment.file:
+            raise AttributeError('New %s attachment must have set file.' % (self.filename))
 
-        self.connector.write(self.instance._meta.db_table, self.instance.pk, attachement.filename, attachement.file,
-                             attachement.content_type)
+        self.connector.write(self.instance._meta.db_table, self.instance.pk, attachment.filename, attachment.file,
+                             attachment.content_type)
 
     def get(self, pk):
         data = self.connector.read(self.instance._meta.db_table, self.instance.pk, pk)
         if not data:
             raise ObjectDoesNotExist
         data = data[0]
-        return Attachement(data.get('nazSoub'), data.get('contentType'), pk=data.get('id'),
-                           instance=self.instance, connector=self.connector)
+        return Attachment(data.get('nazSoub'), data.get('contentType'), pk=data.get('id'),
+                          instance=self.instance, connector=self.connector)
 
 
 class RemoteFileDescriptor(object):
@@ -119,7 +119,7 @@ class RemoteFileDescriptor(object):
         instance.__dict__[self.field.name] = value
 
 
-class AttachementsDescriptor(object):
+class AttachmentsDescriptor(object):
 
     def __init__(self, field):
         self.field = field
@@ -130,7 +130,7 @@ class AttachementsDescriptor(object):
                 'The "%s" attribute can only be accessed from %s instances.'
                 % (self.field.name, owner.__name__))
 
-        attr = Attachements(instance)
+        attr = Attachments(instance)
         instance.__dict__[self.field.name] = attr
         return instance.__dict__[self.field.name]
 
@@ -153,7 +153,7 @@ class AttachmentsField(Field):
 
     def contribute_to_class(self, cls, name):
         super(AttachmentsField, self).contribute_to_class(cls, name)
-        setattr(cls, self.name, AttachementsDescriptor(self))
+        setattr(cls, self.name, AttachmentsDescriptor(self))
 
     def formfield(self, **kwargs):
         return None
