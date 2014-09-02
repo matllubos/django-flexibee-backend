@@ -1,21 +1,24 @@
 import decimal
 
-from functools import wraps
-
 from django.db.models.sql.constants import MULTI, SINGLE
 from django.db.utils import DatabaseError, IntegrityError
 from django.db.models.sql import aggregates as sqlaggregates
+from django.db.models.sql.where import AND
+from django.utils.tree import Node
+from django.utils.encoding import force_text
 
-from djangotoolbox.db.basecompiler import NonrelQuery, NonrelCompiler, \
-    NonrelInsertCompiler, NonrelUpdateCompiler, NonrelDeleteCompiler, EmptyResultSet
+from djangotoolbox.db.basecompiler import (NonrelQuery, NonrelCompiler,
+                                           NonrelInsertCompiler, NonrelUpdateCompiler,
+                                           NonrelDeleteCompiler, EmptyResultSet)
 
 from dateutil.parser import parse
 
 from .connection import RestQuery
 
 from flexibee_backend.db.models import StoreViaForeignKey, CompanyForeignKey, RemoteFileField
-from django.utils.encoding import force_text
 from flexibee_backend.db.models.fields import AttachmentsField
+from flexibee_backend.db.backends.rest.filters import (ElementaryFilter, NotFilter, AndFilter,
+                                                       OrFilter)
 
 # TODO: Change this to match your DB
 # Valid query types (a dictionary is used for speedy lookups).
@@ -117,11 +120,7 @@ class BackendQuery(NonrelQuery):
             for field, is_asc in ordering:
                 self.db_query.add_ordering(field.db_column or field.get_attname(), is_asc)
 
-    # This function is used by the default add_filters() implementation which
-    # only supports ANDed filter rules and simple negation handling for
-    # transforming OR filters to AND filters:
-    # NOT (a OR b) => (NOT a) AND (NOT b)
-    def add_filter(self, field, lookup_type, negated, value):
+    def _generate_elementary_filter(self, field, lookup_type, negated, value):
         try:
             op = OPERATORS_MAP[lookup_type]
         except KeyError:
@@ -132,7 +131,42 @@ class BackendQuery(NonrelQuery):
             op, value = op(lookup_type, value)
 
         db_value = self.compiler.convert_filter_value_for_db(field.get_internal_type(), value)
-        self.db_query.add_filter(field.db_column or field.get_attname(), op, db_value, negated)
+        return ElementaryFilter(field.db_column or field.get_attname(), op, db_value, negated)
+
+
+    def _generate_filter(self, filters):
+        children = self._get_children(filters.children)
+        if len(children) == 0:
+            return None
+        elif len(children) == 1:
+            child = children[0]
+            if isinstance(child, Node):
+                db_filter = self._generate_filter(child)
+            else:
+                field, lookup_type, value = self._decode_child(child)
+                db_filter = self._generate_elementary_filter(field, lookup_type, self._negated, value)
+
+        else:
+            if filters.connector == AND:
+                db_filter = AndFilter()
+            else:
+                db_filter = OrFilter()
+
+            for child in children:
+                if isinstance(child, Node):
+                    db_filter.append(self._generate_filter(child))
+                    continue
+                field, lookup_type, value = self._decode_child(child)
+                db_filter.append(self._generate_elementary_filter(field, lookup_type, self._negated, value))
+
+        if filters.negated:
+            return NotFilter(db_filter)
+        return db_filter
+
+    def add_filters(self, filters):
+        db_filter = self._generate_filter(filters)
+        if db_filter is not None:
+            self.db_query.add_filter(db_filter)
 
 
 class SQLDataCompiler(object):
@@ -322,5 +356,3 @@ class SQLUpdateCompiler(NonrelUpdateCompiler, SQLCompiler):
 
 class SQLDeleteCompiler(NonrelDeleteCompiler, SQLCompiler):
     pass
-
-

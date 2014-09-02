@@ -9,6 +9,7 @@ from django.utils.http import urlquote
 
 from flexibee_backend.db.backends.rest.exceptions import FlexibeeDatabaseException, \
     ChangesNotActivatedFlexibeeDatabaseException
+from flexibee_backend.db.backends.rest.filters import ElementaryFilter
 
 
 def decimal_default(obj):
@@ -47,7 +48,8 @@ class ModelConnector(BaseConnector):
         self.waiting_writes = SortedDict()
 
     def _is_request_for_one_object(self, filters):
-        return len(filters) == 1 and filters[0].field == 'id' and filters[0].op == '=' and not filters[0].negated
+        return (len(filters) == 1 and isinstance(filters[0], ElementaryFilter) and
+                filters[0].field == 'id' and filters[0].op == '=' and not filters[0].negated)
 
     def _get_extra_filter(self, filters):
         extra = ''
@@ -248,26 +250,6 @@ class AttachmentConnector(BaseConnector):
         return requests.get(url, auth=(self.username, self.password))
 
 
-class Filter(object):
-
-    def __init__(self, field, op, value, negated):
-        self.field = field
-        self.op = op
-        self.value = value
-        self.negated = negated
-
-    def __unicode__(self):
-        filter_list = []
-        if self.negated:
-            filter_list.append('not')
-
-        filter_list += [self.field, self.op, unicode(self.value)]
-        return ' '.join(filter_list)
-
-    def __cmp__(self, other):
-        return cmp(unicode(self), unicode(self))
-
-
 class CachedEntity(object):
 
     def __init__(self, entity, fields):
@@ -323,8 +305,8 @@ class RestQuery(object):
     def add_ordering(self, field_name, is_asc):
         self.order_fields.append('%s@%s' % (field_name, is_asc and 'A' or 'D'))
 
-    def add_filter(self, field_name, op, db_value, negated):
-        self.filters.append(Filter(field_name, op, db_value, negated))
+    def add_filter(self, filter):
+        self.filters.append(filter)
 
     def add_relation(self, relation_name):
         self.relations.append(relation_name)
