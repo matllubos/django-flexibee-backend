@@ -78,7 +78,6 @@ class BackendQuery(NonrelQuery):
                 return field
 
     def fetch(self, low_mark=0, high_mark=None):
-
         if hasattr(self.query, 'is_empty') and self.query.is_empty():
             return
 

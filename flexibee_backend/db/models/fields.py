@@ -3,14 +3,23 @@ from django.db.models.fields import Field
 from django.core.exceptions import ObjectDoesNotExist
 from django.http.response import HttpResponse
 
-from flexibee_backend.db.utils import get_connector, MODEL_CONNECTOR, ATTACHMENT_CONNECTOR
+from flexibee_backend.db.utils import (get_connector, MODEL_CONNECTOR, ATTACHMENT_CONNECTOR, get_db_name)
 
 
 class CompanyForeignKey(ForeignKey):
-    pass
+
+    def pre_save(self, model_instance, add):
+        """
+        Necessary because DB does not set company during insert
+        """
+        value = getattr(model_instance, self.name)
+        if not value:
+            setattr(model_instance, self.name, self.rel.to._default_manager.get(flexibee_db_name=get_db_name()))
+        return super(CompanyForeignKey, self).pre_save(model_instance, add)
 
 
 class StoreViaForeignKey(ForeignKey):
+
     def __init__(self, to, db_relation_name=None, *args, **kwargs):
         super(StoreViaForeignKey, self).__init__(to, *args, **kwargs)
         self.db_relation_name = db_relation_name
@@ -52,18 +61,16 @@ class Attachment(object):
         return self.filename
 
     def delete(self):
-        if not self.instance:
+        if not self.instance or not self.connector:
             raise AttributeError('The %s attachment must be firstly stored.' % (self.filename))
-        connector = get_connector(ATTACHMENT_CONNECTOR, self.instance.flexibee_company.flexibee_db_name)
-        connector.delete(self.instance._meta.db_table, self.instance.pk, self.pk)
+        self.connector.delete(self.instance._meta.db_table, self.instance.pk, self.pk)
 
     @property
     def file_response(self):
-        if not self.instance:
+        if not self.instance or not self.connector:
             raise AttributeError('The %s attachment must be firstly stored.' % (self.filename))
 
-        connector = get_connector(ATTACHMENT_CONNECTOR, self.instance.flexibee_company.flexibee_db_name)
-        r = connector.get_response(self.instance._meta.db_table, self.instance.pk, self.pk)
+        r = self.connector.get_response(self.instance._meta.db_table, self.instance.pk, self.pk)
         return HttpResponse(r.content, content_type=r.headers['content-type'])
 
 
@@ -71,7 +78,14 @@ class Attachments(object):
 
     def __init__(self, instance):
         self.instance = instance
-        self.connector = get_connector(ATTACHMENT_CONNECTOR, self.instance.flexibee_company.flexibee_db_name)
+
+    _connector = None
+
+    @property
+    def connector(self):
+        if self._connector is None:
+            self._connector = get_connector(ATTACHMENT_CONNECTOR, self.instance.flexibee_company.flexibee_db_name)
+        return self._connector
 
     def all(self):
         data = self.connector.read(self.instance._meta.db_table, self.instance.pk)

@@ -325,7 +325,8 @@ class RestQuery(object):
         for obj_data in data:
             store_view_db_query = RestQuery(self.connector, self.via_table_name, ['id'],
                                             [self.via_relation_name])
-            store_view_db_query.add_filter('id', '=', obj_data.get(self.via_fk_name), False)
+            store_view_db_query.add_filter(ElementaryFilter('id', '=',
+                                                            obj_data.get(self.via_fk_name), False))
             via_data = {'id': str(obj_data.get(self.via_fk_name))}
             via_data[self.via_relation_name] = [obj_data]
             store_view_db_query.update(via_data)
@@ -334,7 +335,8 @@ class RestQuery(object):
                 return obj_data['id']
             else:
                 query = RestQuery(self.connector, self.table_name, ['id'])
-                query.add_filter(self.via_fk_name, '=', obj_data.get(self.via_fk_name), False)
+                query.add_filter(ElementaryFilter(self.via_fk_name, '=',
+                                                  obj_data.get(self.via_fk_name), False))
                 # http://www.flexibee.eu/api/doc/ref/identifiers
                 query.add_ordering('id', False)
                 return query.fetch(0, 1)[0].get('id')
@@ -343,7 +345,8 @@ class RestQuery(object):
         for obj_data in data:
             store_view_db_query = RestQuery(self.connector, self.via_table_name, ['id'],
                                             [self.via_relation_name])
-            store_view_db_query.add_filter('id', '=', obj_data.get(self.via_fk_name), False)
+            store_view_db_query.add_filter(ElementaryFilter('id', '=',
+                                                            obj_data.get(self.via_fk_name), False))
             via_data = store_view_db_query.fetch(0, 0, extra_fields=['%s(id)' % self.via_relation_name])[0]
             db_related_objs = via_data[self.via_relation_name]
 

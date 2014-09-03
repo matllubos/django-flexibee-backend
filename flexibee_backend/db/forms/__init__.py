@@ -32,20 +32,22 @@ class PostM2MFormMixin(object):
 class FlexibeeAttachmentsModelForm(PostM2MFormMixin, RestModelForm):
 
     new_attachment = forms.FileField(label=_('New attachment'), required=False)
-    existing_attachments = forms.MultipleChoiceField(label=_('Remove attachments'), choices=((1, 'a'), (2, 'b')),
+    existing_attachments = forms.MultipleChoiceField(label=_('Remove attachments'),
                                                      widget=forms.CheckboxSelectMultiple, required=False)
 
     def __init__(self, *args, **kwargs):
         super(FlexibeeAttachmentsModelForm, self).__init__(*args, **kwargs)
-        self.fields['existing_attachments'].choices = [(attachment.pk, mark_safe('<a href="%s">%s</a>' %
-                                                                                 (self.attachment_url(attachment),
-                                                                                  attachment.filename)))
-                                                        for attachment in self.instance.attachments.all()]
+        if self.instance.pk:
+            self.fields['existing_attachments'].choices = [(attachment.pk, mark_safe('<a href="%s">%s</a>' %
+                                                                                     (self.attachment_url(attachment),
+                                                                                      attachment.filename)))
+                                                           for attachment in self.instance.attachments.all()]
 
     def attachment_url(self, attachment):
         return 'attachment/%s__%s' % (attachment.pk, urlquote(attachment.filename))
 
     def post_save(self):
+        print self.instance.flexibee_company_id
         for attachment in self.instance.attachments.all():
             if str(attachment.pk) in self.cleaned_data['existing_attachments']:
                 attachment.delete()

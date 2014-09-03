@@ -46,5 +46,8 @@ class DatabaseWrapper(NonrelDatabaseWrapper):
     def set_db_name(self, db_name):
         self.connector.db_name = db_name
 
+    def get_db_name(self):
+        return self.connector.db_name
+
     def reset(self):
         self.connector.reset()
