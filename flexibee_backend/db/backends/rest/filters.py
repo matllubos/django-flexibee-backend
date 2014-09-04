@@ -31,7 +31,7 @@ class ComposedFilter(BaseFilter):
         self.children.append(child)
 
     def __unicode__(self):
-        return (' %s ' % (self.operator)).join([force_text(child) for child in self.children])
+        return '(%s)' % (' %s ' % (self.operator)).join([force_text(child) for child in self.children])
 
 
 class AndFilter(ComposedFilter):

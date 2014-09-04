@@ -47,7 +47,6 @@ class FlexibeeAttachmentsModelForm(PostM2MFormMixin, RestModelForm):
         return 'attachment/%s__%s' % (attachment.pk, urlquote(attachment.filename))
 
     def post_save(self):
-        print self.instance.flexibee_company_id
         for attachment in self.instance.attachments.all():
             if str(attachment.pk) in self.cleaned_data['existing_attachments']:
                 attachment.delete()
