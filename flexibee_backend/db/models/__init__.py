@@ -8,6 +8,41 @@ from flexibee_backend.db.backends.rest.utils import db_name_validator
 from flexibee_backend.db.backends.rest.admin_connection import admin_connector
 from flexibee_backend.db.backends.rest.exceptions import SyncException
 from flexibee_backend import config
+from flexibee_backend.db.backends.rest.connection import ModelConnector
+from django.db.models.base import ModelBase
+
+
+class OptionsLazy(object):
+
+    def __init__(self, name, klass):
+        self.name = name
+        self.klass = klass
+
+    def __get__(self, instance=None, owner=None):
+        print self.klass
+        option = self.klass(owner)
+        print self.klass(owner)
+        setattr(owner, self.name, option)
+        return option
+
+
+class Options(object):
+
+    def __init__(self, model):
+        self.model = model
+
+
+class FlexibeeOptions(Options):
+
+    def __getattr__(self, name):
+        models = [b for b in self.model.__mro__ if issubclass(b, FlexibeeModel)]
+        for model in models:
+            value = getattr(model.FlexibeeMeta, name, None)
+            print model
+            print value
+            if value is not None:
+                return value
+
 
 class Company(models.Model):
 
@@ -30,8 +65,12 @@ class FlexibeeModel(models.Model):
                                          on_delete=models.DO_NOTHING)
     attachments = AttachmentsField(_('Attachments'), null=True, blank=True, editable=False)
 
+    _flexibee_meta = OptionsLazy('_flexibee_meta', FlexibeeOptions)
+
     class Meta:
         abstract = True
 
     class FlexibeeMeta:
         readonly_fields = []
+        db_connector = ModelConnector
+

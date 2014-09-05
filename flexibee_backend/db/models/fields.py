@@ -152,6 +152,24 @@ class AttachmentsDescriptor(object):
         instance.__dict__[self.field.name] = value
 
 
+class LinksDescriptor(object):
+
+    def __init__(self, field):
+        self.field = field
+
+    def __get__(self, instance=None, owner=None):
+        if instance is None:
+            raise AttributeError(
+                'The "%s" attribute can only be accessed from %s instances.'
+                % (self.field.name, owner.__name__))
+
+        attr = Attachments(instance)
+        instance.__dict__[self.field.name] = attr
+        return instance.__dict__[self.field.name]
+
+    def __set__(self, instance, value):
+        instance.__dict__[self.field.name] = value
+
 class RemoteFileField(Field):
 
     def __init__(self, verbose_name=None, name=None, type=None, **kwargs):
@@ -164,6 +182,16 @@ class RemoteFileField(Field):
 
 
 class AttachmentsField(Field):
+
+    def contribute_to_class(self, cls, name):
+        super(AttachmentsField, self).contribute_to_class(cls, name)
+        setattr(cls, self.name, AttachmentsDescriptor(self))
+
+    def formfield(self, **kwargs):
+        return None
+
+
+class LinksField(Field):
 
     def contribute_to_class(self, cls, name):
         super(AttachmentsField, self).contribute_to_class(cls, name)

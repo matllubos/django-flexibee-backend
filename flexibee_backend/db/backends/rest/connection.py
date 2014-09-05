@@ -18,6 +18,25 @@ def decimal_default(obj):
     raise TypeError
 
 
+class LazyConnector(object):
+
+    connectors = {}
+
+    def __init__(self, username, password, hostname):
+        self.username = username
+        self.password = password
+        self.hostname = hostname
+
+    def get_connector(self, db_connector):
+        # Cache connections
+        connector = self.connectors.get(db_connector, db_connector(self.username, self.password, self.hostname))
+        self.connectors[db_connector] = connector
+        return connector
+
+    def reset(self):
+        for connector in self.connectors.values():
+            connector.reset()
+
 class BaseConnector(object):
 
     URL = 'https://%(hostname)s/c/%(db_name)s/%(table_name)s%(extra)s.%(type)s?%(query_string)s'
@@ -104,7 +123,6 @@ class ModelConnector(BaseConnector):
 
     def read(self, table_name, filters, fields, relations, ordering, offset, base):
         self._check_settings(table_name)
-
         filters = list(filters)
         fields = list(fields)
         relations = list(relations)
@@ -125,6 +143,7 @@ class ModelConnector(BaseConnector):
                           'query_string': self._get_query_string(fields, relations, ordering, offset, base),
                           'extra': extra, 'type': 'json'}
 
+        print url
         self.logger.info('Send GET to %s' % url)
         r = requests.get(url, auth=(self.username, self.password))
 

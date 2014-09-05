@@ -3,7 +3,7 @@ from djangotoolbox.db.base import NonrelDatabaseFeatures, \
     NonrelDatabaseValidation, NonrelDatabaseIntrospection, \
     NonrelDatabaseCreation
 
-from .connection import ModelConnector
+from .connection import LazyConnector
 
 
 class DatabaseCreation(NonrelDatabaseCreation):
@@ -40,7 +40,7 @@ class DatabaseWrapper(NonrelDatabaseWrapper):
         self.creation = DatabaseCreation(self)
         self.validation = DatabaseValidation(self)
         self.introspection = DatabaseIntrospection(self)
-        self.connector = ModelConnector(
+        self.connector = LazyConnector(
             self.settings_dict['USER'], self.settings_dict['PASSWORD'], self.settings_dict['HOSTNAME'])
 
     def set_db_name(self, db_name):

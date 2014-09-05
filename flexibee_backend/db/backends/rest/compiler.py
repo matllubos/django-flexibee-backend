@@ -47,7 +47,7 @@ class BackendQuery(NonrelQuery):
 
     def __init__(self, compiler, fields):
         super(BackendQuery, self).__init__(compiler, fields)
-        self.connector = self.connection.connector
+        self.connector = self.connection.connector.get_connector(self.query.model._flexibee_meta.db_connector)
         store_via_field = self._get_store_via()
 
         query_kwargs = {}
@@ -59,7 +59,8 @@ class BackendQuery(NonrelQuery):
                 'via_fk_name': store_via_field.db_column or store_via_field.get_attname()
             }
 
-        self.db_query = RestQuery(self.connection.connector, self.query.model._meta.db_table,
+        self.db_query = RestQuery(self.connector,
+                                  self.query.model._meta.db_table,
                                   self._get_db_field_names(), **query_kwargs)
 
     def _get_db_field_names(self):
