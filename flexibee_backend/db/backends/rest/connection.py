@@ -26,16 +26,24 @@ class LazyConnector(object):
         self.username = username
         self.password = password
         self.hostname = hostname
+        self.db_name = None
 
     def get_connector(self, db_connector):
         # Cache connections
         connector = self.connectors.get(db_connector, db_connector(self.username, self.password, self.hostname))
         self.connectors[db_connector] = connector
+        connector.set_db_name(self.db_name)
         return connector
 
     def reset(self):
         for connector in self.connectors.values():
             connector.reset()
+
+    def set_db_name(self, db_name):
+        self.db_name = db_name
+        for connector in self.connectors.values():
+            connector.set_db_name(db_name)
+
 
 class BaseConnector(object):
 
@@ -57,6 +65,9 @@ class BaseConnector(object):
 
     def reset(self):
         self.db_name = None
+
+    def set_db_name(self, db_name):
+        self.db_name = db_name
 
 
 class ModelConnector(BaseConnector):

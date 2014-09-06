@@ -44,7 +44,7 @@ class DatabaseWrapper(NonrelDatabaseWrapper):
             self.settings_dict['USER'], self.settings_dict['PASSWORD'], self.settings_dict['HOSTNAME'])
 
     def set_db_name(self, db_name):
-        self.connector.db_name = db_name
+        self.connector.set_db_name(db_name)
 
     def get_db_name(self):
         return self.connector.db_name

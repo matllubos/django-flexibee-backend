@@ -19,9 +19,7 @@ class OptionsLazy(object):
         self.klass = klass
 
     def __get__(self, instance=None, owner=None):
-        print self.klass
         option = self.klass(owner)
-        print self.klass(owner)
         setattr(owner, self.name, option)
         return option
 
@@ -38,8 +36,6 @@ class FlexibeeOptions(Options):
         models = [b for b in self.model.__mro__ if issubclass(b, FlexibeeModel)]
         for model in models:
             value = getattr(model.FlexibeeMeta, name, None)
-            print model
-            print value
             if value is not None:
                 return value
 
