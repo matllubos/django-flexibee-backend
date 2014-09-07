@@ -16,9 +16,10 @@ from dateutil.parser import parse
 from .connection import RestQuery
 
 from flexibee_backend.db.models import StoreViaForeignKey, CompanyForeignKey, RemoteFileField
-from flexibee_backend.db.models.fields import AttachmentsField
+from flexibee_backend.db.models.fields import ItemsField
 from flexibee_backend.db.backends.rest.filters import (ElementaryFilter, NotFilter, AndFilter,
                                                        OrFilter)
+from flexibee_backend.db.models.utils import lazy_obj_loader
 
 # TODO: Change this to match your DB
 # Valid query types (a dictionary is used for speedy lookups).
@@ -36,7 +37,7 @@ OPERATORS_MAP = {
     'endswith': 'ends',
 }
 
-DEFAULT_READONLY_FIELD_CLASSES = (RemoteFileField, AttachmentsField)
+DEFAULT_READONLY_FIELD_CLASSES = (RemoteFileField, ItemsField)
 
 
 def get_field_db_name(field):
@@ -94,7 +95,7 @@ class BackendQuery(NonrelQuery):
                 db_field_name = get_field_db_name(field)
                 if db_field_name == 'flexibee_company_id':
                     output[db_field_name] = field.rel.to._default_manager.get(flexibee_db_name=self.db_query.db_name).pk
-                elif isinstance(field, (RemoteFileField, AttachmentsField)):
+                elif isinstance(field, (RemoteFileField, ItemsField)):
                     pass
                 else:
                     output[db_field_name] = self.compiler.convert_value_from_db(field.get_internal_type(),
@@ -317,7 +318,7 @@ class SQLInsertCompiler(NonrelInsertCompiler, SQLCompiler):
                                          "field) to None!" % field.name)
 
                 if field.get_attname() != 'flexibee_company_id' \
-                    and field.get_attname() not in self.query.model.FlexibeeMeta.readonly_fields \
+                    and field.get_attname() not in self.query.model._flexibee_meta.readonly_fields \
                     and not isinstance(field, DEFAULT_READONLY_FIELD_CLASSES):
                     # Prepare value for database, note that query.values have
                     # already passed through get_db_prep_save.
@@ -341,7 +342,7 @@ class SQLUpdateCompiler(NonrelUpdateCompiler, SQLCompiler):
 
         for field, value in values:
             if field.get_attname() != 'flexibee_company_id'\
-                and field.get_attname() not in self.query.model.FlexibeeMeta.readonly_fields\
+                and field.get_attname() not in self.query.model._flexibee_meta.readonly_fields\
                 and not isinstance(field, DEFAULT_READONLY_FIELD_CLASSES):
 
                 db_value = self.convert_value_for_db(field.get_internal_type(), value)

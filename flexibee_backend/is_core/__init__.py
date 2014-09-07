@@ -27,7 +27,7 @@ class FlexibeeIsCore(UIRestModelISCore):
 
     def get_view_classes(self):
         view_classes = super(FlexibeeIsCore, self).get_view_classes()
-        view_classes['attachment'] = (r'^/(?P<pk>[-\w]+)/attachment/(?P<attachment_pk>[-\d]+)__(?P<attachment_name>.+)$', 
+        view_classes['attachment'] = (r'^/(?P<pk>[-\w]+)/attachment/(?P<attachment_pk>[-\d]+)__(?P<attachment_name>.+)$',
                                       AttachmentFileView, AttachmentsFlexibeeUIPattern)
         return view_classes
 
@@ -55,10 +55,10 @@ class FlexibeeIsCore(UIRestModelISCore):
     def get_resource_patterns(self):
         resource_patterns = SortedDict()
         resource_patterns['api-resource'] = FlexibeeRestPattern('api-resource-%s' % self.get_menu_group_pattern_name(),
-                                                                self.site_name, r'^/api/(?P<pk>[-\w]+)/?$',
+                                                                self.site_name, r'^/(?P<pk>[-\w]+)/?$',
                                                                 self.rest_resource, self, ('GET', 'PUT', 'DELETE'))
         resource_patterns['api'] = FlexibeeRestPattern('api-%s' % self.get_menu_group_pattern_name(), self.site_name,
-                                                       r'^/api/?$', self.rest_resource, self, ('GET', 'POST'))
+                                                       r'^/?$', self.rest_resource, self, ('GET', 'POST'))
         return resource_patterns
 
     def get_api_url(self, request):

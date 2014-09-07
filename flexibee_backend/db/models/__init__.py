@@ -1,13 +1,141 @@
+import decimal
+
 from .fields import *
 
 from django.db import models
 from django.template.defaultfilters import slugify
 from django.utils.translation import ugettext_lazy as _
+from django.db.models.base import ModelBase
+from django.utils.functional import SimpleLazyObject
 
 from flexibee_backend.db.backends.rest.utils import db_name_validator
 from flexibee_backend.db.backends.rest.admin_connection import admin_connector
 from flexibee_backend.db.backends.rest.exceptions import SyncException
 from flexibee_backend import config
+from flexibee_backend.db.backends.rest.connection import ModelConnector, AttachmentConnector, RelationConnector
+from flexibee_backend.db.models.utils import get_model_by_db_table, lazy_obj_loader
+
+
+class FlexibeeItem(object):
+
+    connector_class = None
+
+    def __init__(self, instance, connector, data=None, **kwargs):
+        self.instance = instance
+        self.connector = connector
+        if data is not None:
+            self._decode(data)
+
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+    def _decode(self, data):
+        raise NotImplementedError
+
+    def _encode(self, data):
+        raise NotImplementedError
+
+    def delete(self):
+        raise NotImplementedError
+
+    def save(self):
+        raise NotImplementedError
+
+    def __str__(self):
+        return self.__unicode__()
+
+
+class Attachment(FlexibeeItem):
+
+    connector_class = AttachmentConnector
+
+    filename = None
+    file = None
+
+    def _decode(self, data):
+        self.filename = data.get('nazSoub')
+        self.content_type = data.get('contentType')
+        self.pk = data.get('id')
+
+    def __unicode__(self):
+        return self.filename
+
+    def delete(self):
+        self.connector.delete(self.instance._meta.db_table, self.instance.pk, self.pk)
+
+    def save(self):
+        if not self.file or not self.filename:
+            raise AttributeError('File and filename is required.')
+        self.connector.write(self.instance._meta.db_table, self.instance.pk, self.filename, self.file,
+                             self.content_type)
+
+    @property
+    def file_response(self):
+        if not self.instance or not self.connector:
+            raise AttributeError('The %s attachment must be firstly stored.' % (self.filename))
+
+        r = self.connector.get_response(self.instance._meta.db_table, self.instance.pk, self.pk)
+        return HttpResponse(r.content, content_type=r.headers['content-type'])
+
+
+class Relation(FlexibeeItem):
+
+    connector_class = RelationConnector
+    invoice = None
+
+    def _decode(self, data):
+        related_model = get_model_by_db_table(data['%s@ref' % 'a'].split('/')[-2])
+        self.invoice = lazy_obj_loader(related_model, {'pk': data['%s@ref' % 'a'].split('/')[-1][:-5]},
+                                       self.instance.flexibee_company.db_name)
+        self.type = data['typVazbyK']
+        self.sum = decimal.Decimal(data['castka'])
+
+    def _encode(self):
+        data = {}
+        data['uhrazovanaFak'] = self.invoice.pk
+        data['uhrazovanaFak@type'] = self.invoice._meta.db_table
+        data['zbytek'] = 'ignorovat'
+        return data
+
+    def __unicode__(self):
+        return '%s %s' % (self.invoice, self.instance)
+
+    def delete(self):
+        self.connector.delete(self.instance._meta.db_table, self.instance.pk, {'odparovani': self._encode()})
+
+    def save(self):
+        if not self.invoice:
+            raise AttributeError('Invoice is required.')
+        self.connector.write(self.instance._meta.db_table, self.instance.pk, {'sparovani': self._encode()})
+
+
+class OptionsLazy(object):
+
+    def __init__(self, name, klass):
+        self.name = name
+        self.klass = klass
+
+    def __get__(self, instance=None, owner=None):
+        option = self.klass(owner)
+        setattr(owner, self.name, option)
+        return option
+
+
+class Options(object):
+
+    def __init__(self, model):
+        self.model = model
+
+
+class FlexibeeOptions(Options):
+
+    def __getattr__(self, name):
+        models = [b for b in self.model.__mro__ if issubclass(b, FlexibeeModel)]
+        for model in models:
+            value = getattr(model.FlexibeeMeta, name, None)
+            if value is not None:
+                return value
+
 
 class Company(models.Model):
 
@@ -28,10 +156,15 @@ class FlexibeeModel(models.Model):
 
     flexibee_company = CompanyForeignKey(config.FLEXIBEE_COMPANY_MODEL, null=True, blank=True, editable=False,
                                          on_delete=models.DO_NOTHING)
-    attachments = AttachmentsField(_('Attachments'), null=True, blank=True, editable=False)
+    attachments = ItemsField(Attachment, verbose_name=_('Attachments'), null=True, blank=True, editable=False)
+
+    _flexibee_meta = OptionsLazy('_flexibee_meta', FlexibeeOptions)
 
     class Meta:
         abstract = True
 
     class FlexibeeMeta:
         readonly_fields = []
+
+    class RestMeta:
+        default_list_fields = ('id',)

@@ -5,7 +5,7 @@ from django.utils.http import urlquote
 
 from is_core.forms import RestModelForm
 
-from flexibee_backend.db.models.fields import Attachment
+from flexibee_backend.db.models import Attachment
 
 
 class PostM2MFormMixin(object):
@@ -54,4 +54,4 @@ class FlexibeeAttachmentsModelForm(PostM2MFormMixin, RestModelForm):
         new_attachment = self.cleaned_data.get('new_attachment')
         if new_attachment:
             file = self.files.get('%s-new_attachment' % self.prefix)
-            self.instance.attachments.create(Attachment(file.name, file.content_type, file=file.file))
+            self.instance.attachments.create(filename=file.name, content_type=file.content_type, file=file.file)

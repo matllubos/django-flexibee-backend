@@ -59,7 +59,7 @@ class FlexibeeAdminConnector(object):
         else:
             url = self.CREATE_URL % {'hostname': self.hostname}
             data = {'country': 'CZ'}
-            for from_name, to_name in company.FlexibeeMeta.create_mapping.items():
+            for from_name, to_name in company._flexibee_meta.create_mapping.items():
                 data[to_name] = self._get_field_value(company, from_name)
 
             query_string = '&'.join(['%s=%s' % (key, urlquote(val)) for key, val in data.items()])
@@ -75,7 +75,7 @@ class FlexibeeAdminConnector(object):
         if not config.TESTING:
             url = self.UPDATE_URL % {'hostname': self.hostname, 'db_name': company.flexibee_db_name}
             data = {}
-            for from_name, to_name in company.FlexibeeMeta.update_mapping.items():
+            for from_name, to_name in company._flexibee_meta.update_mapping.items():
                 data[to_name] = self._get_field_value(company, from_name)
             data = {'winstrom': {'nastaveni': data}}
             headers = {'Accept': 'application/json'}

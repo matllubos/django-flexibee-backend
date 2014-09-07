@@ -1,5 +1,7 @@
-import requests, json, logging, decimal
-import time
+import requests
+import json
+import logging
+import decimal
 
 from django.db.utils import DatabaseError
 from django.utils.encoding import force_text
@@ -124,7 +126,6 @@ class ModelConnector(BaseConnector):
         url = self.URL % {'hostname': self.hostname, 'db_name': self.db_name, 'table_name': table_name,
                           'query_string': self._get_query_string(fields, relations, ordering, offset, base),
                           'extra': extra, 'type': 'json'}
-
         self.logger.info('Send GET to %s' % url)
         r = requests.get(url, auth=(self.username, self.password))
 
@@ -248,6 +249,45 @@ class AttachmentConnector(BaseConnector):
         url = url % {'hostname': self.hostname, 'db_name': self.db_name,
                      'table_name': table_name, 'id': id, 'attachment_id': attachment_id}
         return requests.get(url, auth=(self.username, self.password))
+
+
+class RelationConnector(BaseConnector):
+
+    def read(self, table_name, id, relation_id=None):
+        self._check_settings(table_name)
+
+        extra = '/%s/vazby' % id
+        if relation_id:
+            extra = '/'.join((extra, str(relation_id)))
+
+        url = self.URL % {'hostname': self.hostname, 'db_name': self.db_name,
+                          'table_name': table_name, 'query_string': '',
+                          'extra': extra, 'type': 'json'}
+
+        r = requests.get(url, auth=(self.username, self.password))
+        return r.json().get('winstrom').get('vazba')
+
+    def delete(self, table_name, id, data):
+        self._check_settings(table_name)
+
+        url = 'https://%(hostname)s/c/%(db_name)s/%(table_name)s/%(id)s.json'
+        self._check_settings(table_name)
+        url = url % {'hostname': self.hostname, 'db_name': self.db_name,
+                     'table_name': table_name, 'id': id}
+
+        data = {'winstrom': {table_name: data}}
+        requests.put(url, data=self._serialize(data), auth=(self.username, self.password))
+
+    def write(self, table_name, id, data):
+        self._check_settings(table_name)
+
+        url = 'https://%(hostname)s/c/%(db_name)s/%(table_name)s/%(id)s.json'
+        self._check_settings(table_name)
+        url = url % {'hostname': self.hostname, 'db_name': self.db_name,
+                     'table_name': table_name, 'id': id}
+
+        data = {'winstrom': {table_name: data}}
+        requests.put(url, data=self._serialize(data), auth=(self.username, self.password))
 
 
 class CachedEntity(object):
