@@ -8,9 +8,9 @@ class FlexibeeDatabaseException(DatabaseError):
         self.url = url
         if url:
             msg = '%s %s ' % (url, msg)
-        super(FlexibeeDatabaseException, self).__init__(msg)
         self.resp = resp
         self.json_data = resp.json().get('winstrom')
+        super(FlexibeeDatabaseException, self).__init__('%s errors: %s' % (msg, self.errors))
 
     def stat(self):
         return self.json_data.get('stat')

@@ -9,14 +9,14 @@ def get_model_by_db_table(db_table):
             return model
 
 
-def load_object(model, pk, db_name):
+def load_object(model, filter, db_name):
     if db_name:
         old_db_name = get_db_name()
         set_db_name(db_name)
         obj = model._default_manager.get(**filter)
         set_db_name(old_db_name)
     else:
-        obj = model.objects.get(pk=pk)
+        obj = model.objects.get(**filter)
     return obj
 
 

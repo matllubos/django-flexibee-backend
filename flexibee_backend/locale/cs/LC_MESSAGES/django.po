@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2014-09-02 14:10-0500\n"
+"POT-Creation-Date: 2014-09-08 15:10-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -23,18 +23,42 @@ msgstr ""
 msgid "DB name %s does not exists"
 msgstr "DB s názvem %s neexistuje"
 
-#: db/forms/__init__.py:33
+#: db/forms/__init__.py:34
 msgid "New attachment"
 msgstr "Nová příloha"
 
-#: db/forms/__init__.py:34
+#: db/forms/__init__.py:35
 msgid "Remove attachments"
 msgstr "Odstranit přílohy"
 
-#: db/models/__init__.py:14
+#: db/models/__init__.py:94
+msgid "Not accept"
+msgstr "Neakceptovat"
+
+#: db/models/__init__.py:95
+msgid "Ignore"
+msgstr "Ignorovat"
+
+#: db/models/__init__.py:96
+msgid "Record"
+msgstr "Zaúčtovat"
+
+#: db/models/__init__.py:97
+msgid "Partial payment"
+msgstr "Částečná platba"
+
+#: db/models/__init__.py:98
+msgid "Partial payment or record"
+msgstr "Částečná platba nebo zaúčtovat"
+
+#: db/models/__init__.py:99
+msgid "Partial payment or ignore"
+msgstr "Částečná platba nebo ignorovat"
+
+#: db/models/__init__.py:170
 msgid "DB name"
 msgstr "Název databáze"
 
-#: db/models/__init__.py:31
+#: db/models/__init__.py:187
 msgid "Attachments"
 msgstr "Přílohy"
