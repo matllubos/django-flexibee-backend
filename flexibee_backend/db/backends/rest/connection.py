@@ -231,7 +231,11 @@ class AttachmentConnector(BaseConnector):
         url = url % {'hostname': self.hostname, 'db_name': self.db_name,
                      'table_name': table_name, 'id': id, 'filename': filename}
         headers = {'content-type': content_type}
-        requests.put(url, files={'file':file}, headers=headers, auth=(self.username, self.password))
+
+        r = requests.put(url, files={'file':file}, headers=headers, auth=(self.username, self.password))
+        if r.status_code not in [200, 201]:
+            self.logger.warning('Response %s, content: %s' % (r.status_code, force_text(r.text)))
+            raise FlexibeeDatabaseException('Rest PUT method error', r, url)
 
     def delete(self, table_name, id, attachment_id):
         self._check_settings(table_name)
@@ -240,7 +244,10 @@ class AttachmentConnector(BaseConnector):
         self._check_settings(table_name)
         url = url % {'hostname': self.hostname, 'db_name': self.db_name,
                      'table_name': table_name, 'id': id, 'attachment_id': attachment_id}
-        requests.delete(url, auth=(self.username, self.password))
+        r = requests.delete(url, auth=(self.username, self.password))
+        if r.status_code not in [200, 201]:
+            self.logger.warning('Response %s, content: %s' % (r.status_code, force_text(r.text)))
+            raise FlexibeeDatabaseException('Rest DELETE method error', r, url)
 
     def get_response(self, table_name, id, attachment_id):
         self._check_settings(table_name)
@@ -276,7 +283,10 @@ class RelationConnector(BaseConnector):
                      'table_name': table_name, 'id': id}
 
         data = {'winstrom': {table_name: data}}
-        requests.put(url, data=self._serialize(data), auth=(self.username, self.password))
+        r = requests.put(url, data=self._serialize(data), auth=(self.username, self.password))
+        if r.status_code not in [200, 201]:
+            self.logger.warning('Response %s, content: %s' % (r.status_code, force_text(r.text)))
+            raise FlexibeeDatabaseException('Rest PUT method error', r, url)
 
     def write(self, table_name, id, data):
         self._check_settings(table_name)
@@ -287,7 +297,10 @@ class RelationConnector(BaseConnector):
                      'table_name': table_name, 'id': id}
 
         data = {'winstrom': {table_name: data}}
-        requests.put(url, data=self._serialize(data), auth=(self.username, self.password))
+        r = requests.put(url, data=self._serialize(data), auth=(self.username, self.password))
+        if r.status_code not in [200, 201]:
+            self.logger.warning('Response %s, content: %s' % (r.status_code, force_text(r.text)))
+            raise FlexibeeDatabaseException('Rest PUT method error', r, url)
 
 
 class CachedEntity(object):

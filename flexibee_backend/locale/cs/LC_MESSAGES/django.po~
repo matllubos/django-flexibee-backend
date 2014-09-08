@@ -33,27 +33,27 @@ msgstr "Odstranit přílohy"
 
 #: db/models/__init__.py:94
 msgid "Not accept"
-msgstr "Neakceptovat"
+msgstr ""
 
 #: db/models/__init__.py:95
 msgid "Ignore"
-msgstr "Ignorovat"
+msgstr ""
 
 #: db/models/__init__.py:96
 msgid "Record"
-msgstr "Zaúčtovat"
+msgstr ""
 
 #: db/models/__init__.py:97
 msgid "Partial payment"
-msgstr "Částečná platba"
+msgstr ""
 
 #: db/models/__init__.py:98
 msgid "Partial payment or record"
-msgstr "Částečná platba nebo zaúčtovat"
+msgstr ""
 
 #: db/models/__init__.py:99
 msgid "Partial payment or ignore"
-msgstr "Částečná platba nebo ignorovat"
+msgstr ""
 
 #: db/models/__init__.py:170
 msgid "DB name"

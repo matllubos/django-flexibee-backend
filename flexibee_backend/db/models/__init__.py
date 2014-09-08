@@ -7,12 +7,15 @@ from django.template.defaultfilters import slugify
 from django.utils.translation import ugettext_lazy as _
 from django.db.models.base import ModelBase
 from django.utils.functional import SimpleLazyObject
+from django.core.exceptions import ValidationError
+from django.utils.translation import ugettext_lazy as _
 
 from flexibee_backend.db.backends.rest.utils import db_name_validator
 from flexibee_backend.db.backends.rest.admin_connection import admin_connector
-from flexibee_backend.db.backends.rest.exceptions import SyncException
+from flexibee_backend.db.backends.rest.exceptions import SyncException, \
+    FlexibeeDatabaseException
 from flexibee_backend import config
-from flexibee_backend.db.backends.rest.connection import ModelConnector, AttachmentConnector, RelationConnector
+from flexibee_backend.db.backends.rest.connection import AttachmentConnector, RelationConnector
 from flexibee_backend.db.models.utils import get_model_by_db_table, lazy_obj_loader
 
 
@@ -65,7 +68,7 @@ class Attachment(FlexibeeItem):
 
     def save(self):
         if not self.file or not self.filename:
-            raise AttributeError('File and filename is required.')
+            raise ValidationError('File and filename is required.')
         self.connector.write(self.instance._meta.db_table, self.instance.pk, self.filename, self.file,
                              self.content_type)
 
@@ -80,13 +83,29 @@ class Attachment(FlexibeeItem):
 
 class Relation(FlexibeeItem):
 
+    REMAIN_IGNORE = 'ignorovat'
+    REMAIN_NOT_ACCEPT = 'ne'
+    REMAIN_RECORD = 'zauctovat'
+    REMAIN_PARTIAL_PAYMENT = 'castecnaUhrada'
+    REMAIN_PARTIAL_PAYMENT_OR_RECORD = 'castecnaUhradaNeboZauctovat'
+    REMAIN_PARTIAL_PAYMENT_OR_IGNORE = 'castecnaUhradaNeboIgnorovat'
+
+    REMAIN_CHOICES = (
+        (REMAIN_NOT_ACCEPT, _('Not accept')),
+        (REMAIN_IGNORE, _('Ignore')),
+        (REMAIN_RECORD, _('Record')),
+        (REMAIN_PARTIAL_PAYMENT, _('Partial payment')),
+        (REMAIN_PARTIAL_PAYMENT_OR_RECORD, _('Partial payment or record')),
+        (REMAIN_PARTIAL_PAYMENT_OR_IGNORE, _('Partial payment or ignore')),
+    )
     connector_class = RelationConnector
     invoice = None
+    remain = None
 
     def _decode(self, data):
         related_model = get_model_by_db_table(data['%s@ref' % 'a'].split('/')[-2])
         self.invoice = lazy_obj_loader(related_model, {'pk': data['%s@ref' % 'a'].split('/')[-1][:-5]},
-                                       self.instance.flexibee_company.db_name)
+                                       self.instance.flexibee_company.flexibee_db_name)
         self.type = data['typVazbyK']
         self.sum = decimal.Decimal(data['castka'])
 
@@ -94,19 +113,28 @@ class Relation(FlexibeeItem):
         data = {}
         data['uhrazovanaFak'] = self.invoice.pk
         data['uhrazovanaFak@type'] = self.invoice._meta.db_table
-        data['zbytek'] = 'ignorovat'
+        data['zbytek'] = self.remain
         return data
 
     def __unicode__(self):
         return '%s %s' % (self.invoice, self.instance)
 
     def delete(self):
-        self.connector.delete(self.instance._meta.db_table, self.instance.pk, {'odparovani': self._encode()})
+        try:
+            self.connector.delete(self.instance._meta.db_table, self.instance.pk, {'odparovani': self._encode()})
+        except FlexibeeDatabaseException as ex:
+            raise ValidationError(ex.errors)
 
     def save(self):
-        if not self.invoice:
-            raise AttributeError('Invoice is required.')
-        self.connector.write(self.instance._meta.db_table, self.instance.pk, {'sparovani': self._encode()})
+        if not self.remain or not self.invoice:
+            raise ValidationError('Remain and invoice is required.')
+
+        try:
+            if not self.invoice:
+                raise ValidationError('Invoice is required.')
+            self.connector.write(self.instance._meta.db_table, self.instance.pk, {'sparovani': self._encode()})
+        except FlexibeeDatabaseException as ex:
+            raise ValidationError(ex.errors)
 
 
 class OptionsLazy(object):
