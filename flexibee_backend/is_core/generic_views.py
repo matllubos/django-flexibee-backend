@@ -9,6 +9,8 @@ from flexibee_backend.db.backends.rest.exceptions import FlexibeeDatabaseExcepti
 from flexibee_backend.db.utils import set_db_name
 
 from .filters import *
+from flexibee_backend.is_core.forms import FlexibeeAttachmentForm
+from django.forms.formsets import formset_factory
 
 
 class FlexibeeTabsViewMixin(TabsViewMixin):
@@ -61,3 +63,37 @@ class FlexibeeTabularInlineFormView(FlexibeeInlineFormView, TabularInlineFormVie
 
 class FlexibeeStackedInlineFormView(FlexibeeInlineFormView, StackedInlineFormView):
     pass
+
+
+
+class FlexibeeItemInlineFormView(object):
+    """
+    InlineFormView for special flexibee objects that is firmly connected to another object (can not be implemented as
+    standard django model)
+    """
+
+    def get_formset(self, instance, data, files):
+        print formset_factory(self.form_class, extra=2)
+
+        formset = formset_factory(self.form_class, extra=2)()
+
+        formset.can_add = self.get_can_add()
+        formset.can_delete = self.get_can_delete()
+
+        formset.all_forms = formset.forms + [formset.empty_form]
+        print formset.all_forms
+        for form in formset:
+            # TODO: solve exception
+            # form.class_names = self.form_class_names(form)
+            # self.form_fields(form)
+            print form
+        return formset
+
+    def get_name(self):
+        # TODO: solve
+        return 'attachement'
+
+class FlexibeeAttachmentFormView(FlexibeeItemInlineFormView):
+    form_class = FlexibeeAttachmentForm
+
+
