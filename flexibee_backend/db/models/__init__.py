@@ -8,7 +8,6 @@ from django.utils.translation import ugettext_lazy as _
 from django.db.models.base import ModelBase
 from django.utils.functional import SimpleLazyObject
 from django.core.exceptions import ValidationError
-from django.utils.translation import ugettext_lazy as _
 
 from flexibee_backend.db.backends.rest.utils import db_name_validator
 from flexibee_backend.db.backends.rest.admin_connection import admin_connector
@@ -20,6 +19,9 @@ from flexibee_backend.db.models.utils import get_model_by_db_table, lazy_obj_loa
 
 
 class FlexibeeItem(object):
+    """
+    Class which represents model for objects which is firmly connected to other real db model
+    """
 
     connector_class = None
 
@@ -33,15 +35,27 @@ class FlexibeeItem(object):
             setattr(self, key, value)
 
     def _decode(self, data):
+        """
+        There should be added code which implements data dencoding from flexibee backend
+        """
         raise NotImplementedError
 
     def _encode(self, data):
+        """
+        There should be added code which implements data encoding for flexibee backend
+        """
         raise NotImplementedError
 
     def delete(self):
+        """
+        There should be added code which implements calls connector for deleting object
+        """
         raise NotImplementedError
 
     def save(self):
+        """
+        There should be added code which implements calls connector for creating or updating object
+        """
         raise NotImplementedError
 
     def __str__(self):
@@ -49,6 +63,9 @@ class FlexibeeItem(object):
 
 
 class Attachment(FlexibeeItem):
+    """
+    Attachements for all flexibee objects
+    """
 
     connector_class = AttachmentConnector
 
@@ -82,6 +99,12 @@ class Attachment(FlexibeeItem):
 
 
 class Relation(FlexibeeItem):
+    """
+    Relations among pokladni-pohyb,banka/faktura-vydana,faktura-prijata
+    Relation work for both sides:
+        pokladni-pohyb,banka => faktura-vydana,faktura-prijata
+        faktura-vydana,faktura-prijata => pokladni-pohyb,banka
+    """
 
     REMAIN_IGNORE = 'ignorovat'
     REMAIN_NOT_ACCEPT = 'ne'
@@ -100,12 +123,26 @@ class Relation(FlexibeeItem):
     )
     connector_class = RelationConnector
     invoice = None
+    payment = None
     remain = None
 
+    def __init__(self, instance, connector, data=None, **kwargs):
+        super(Relation, self).__init__(instance, connector, data, **kwargs)
+        if self.instance._meta.db_table in ['pokladni-pohyb', 'banka']:
+            self.payment = self.instance
+        elif self.instance._meta.db_table in ['faktura-vydana', 'faktura-prijata']:
+            self.invoice = self.instance
+
+    def _get_related_obj(self, data, field_name):
+        related_model = get_model_by_db_table(data['%s@ref' % field_name].split('/')[-2])
+        return lazy_obj_loader(related_model, {'pk': data['%s@ref' % field_name].split('/')[-1][:-5]},
+                               self.instance.flexibee_company.flexibee_db_name)
+
     def _decode(self, data):
-        related_model = get_model_by_db_table(data['%s@ref' % 'a'].split('/')[-2])
-        self.invoice = lazy_obj_loader(related_model, {'pk': data['%s@ref' % 'a'].split('/')[-1][:-5]},
-                                       self.instance.flexibee_company.flexibee_db_name)
+        if self.instance._meta.db_table in ['pokladni-pohyb', 'banka']:
+            self.invoice = self._get_related_obj(data, 'a')
+        elif self.instance._meta.db_table in ['faktura-vydana', 'faktura-prijata']:
+            self.payment = self._get_related_obj(data, 'b')
         self.type = data['typVazbyK']
         self.sum = decimal.Decimal(data['castka'])
 
@@ -121,7 +158,7 @@ class Relation(FlexibeeItem):
 
     def delete(self):
         try:
-            self.connector.delete(self.instance._meta.db_table, self.instance.pk, {'odparovani': self._encode()})
+            self.connector.delete(self.payment._meta.db_table, self.payment.pk, {'odparovani': self._encode()})
         except FlexibeeDatabaseException as ex:
             raise ValidationError(ex.errors)
 
@@ -132,7 +169,9 @@ class Relation(FlexibeeItem):
         try:
             if not self.invoice:
                 raise ValidationError('Invoice is required.')
-            self.connector.write(self.instance._meta.db_table, self.instance.pk, {'sparovani': self._encode()})
+            if not self.payment:
+                raise ValidationError('Payment is required.')
+            self.connector.write(self.payment._meta.db_table, self.payment.pk, {'sparovani': self._encode()})
         except FlexibeeDatabaseException as ex:
             raise ValidationError(ex.errors)
 
