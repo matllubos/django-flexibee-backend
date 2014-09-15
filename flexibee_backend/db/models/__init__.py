@@ -24,11 +24,13 @@ class FlexibeeItem(object):
     """
 
     connector_class = None
+    stored = False
 
     def __init__(self, instance, connector, data=None, **kwargs):
         self.instance = instance
         self.connector = connector
         if data is not None:
+            self.stored = True
             self._decode(data)
 
         for key, value in kwargs.items():
@@ -47,12 +49,20 @@ class FlexibeeItem(object):
         raise NotImplementedError
 
     def delete(self):
+        self._delete()
+        self.stored = False
+
+    def save(self):
+        self._save()
+        self.stored = True
+
+    def _delete(self):
         """
         There should be added code which implements calls connector for deleting object
         """
         raise NotImplementedError
 
-    def save(self):
+    def _save(self):
         """
         There should be added code which implements calls connector for creating or updating object
         """
@@ -80,10 +90,10 @@ class Attachment(FlexibeeItem):
     def __unicode__(self):
         return self.filename
 
-    def delete(self):
+    def _delete(self):
         self.connector.delete(self.instance._meta.db_table, self.instance.pk, self.pk)
 
-    def save(self):
+    def _save(self):
         if not self.file or not self.filename:
             raise ValidationError('File and filename is required.')
         self.connector.write(self.instance._meta.db_table, self.instance.pk, self.filename, self.file,
@@ -156,13 +166,13 @@ class Relation(FlexibeeItem):
     def __unicode__(self):
         return '%s %s' % (self.invoice, self.instance)
 
-    def delete(self):
+    def _delete(self):
         try:
             self.connector.delete(self.payment._meta.db_table, self.payment.pk, {'odparovani': self._encode()})
         except FlexibeeDatabaseException as ex:
             raise ValidationError(ex.errors)
 
-    def save(self):
+    def _save(self):
         if not self.remain or not self.invoice:
             raise ValidationError('Remain and invoice is required.')
 

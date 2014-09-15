@@ -69,8 +69,12 @@ class ItemsManager(object):
         return items_list
 
     def create(self, **kwargs):
-        item = self.item_class(self.instance, self.connector, **kwargs)
+        item = self.add(**kwargs)
         item.save()
+        return item
+
+    def add(self, **kwargs):
+        return self.item_class(self.instance, self.connector, **kwargs)
 
     def get(self, pk):
         data = self.connector.read(self.instance._meta.db_table, self.instance.pk, pk)

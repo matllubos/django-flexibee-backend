@@ -11,6 +11,7 @@ from flexibee_backend.db.utils import set_db_name
 from .filters import *
 from flexibee_backend.is_core.forms import FlexibeeAttachmentForm
 from django.forms.formsets import formset_factory
+from flexibee_backend.is_core.forms.formsets import ItemBaseFormSet
 
 
 class FlexibeeTabsViewMixin(TabsViewMixin):
@@ -66,34 +67,60 @@ class FlexibeeStackedInlineFormView(FlexibeeInlineFormView, StackedInlineFormVie
 
 
 
-class FlexibeeItemInlineFormView(object):
+class FlexibeeItemInlineFormViewMixin(object):
     """
     InlineFormView for special flexibee objects that is firmly connected to another object (can not be implemented as
     standard django model)
     """
 
     def get_formset(self, instance, data, files):
-        print formset_factory(self.form_class, extra=2)
+        extra = self.get_extra()
 
-        formset = formset_factory(self.form_class, extra=2)()
+        if data:
+            formset = formset_factory(self.form_class, formset=ItemBaseFormSet,
+                                      extra=extra)(instance, self.get_queryset(instance), data=data, files=files,
+                                                   prefix=self.get_prefix())
+        else:
+            formset = formset_factory(self.form_class, formset=ItemBaseFormSet,
+                                      extra=extra)(instance, self.get_queryset(instance), prefix=self.get_prefix())
 
         formset.can_add = self.get_can_add()
         formset.can_delete = self.get_can_delete()
 
-        formset.all_forms = formset.forms + [formset.empty_form]
-        print formset.all_forms
         for form in formset:
             # TODO: solve exception
             # form.class_names = self.form_class_names(form)
             # self.form_fields(form)
-            print form
+            pass
         return formset
+
+    def get_queryset(self, instance):
+        return instance.attachments.all()
+
+    def form_valid(self, request):
+        instances = self.formset.save(commit=False)
+        print type(self.formset)
+        print instances
+        for obj in instances:
+            self.save_obj(obj, obj.stored)
+        for obj in self.formset.deleted_objects:
+            self.delete_obj(obj)
 
     def get_name(self):
         # TODO: solve
         return 'attachement'
 
-class FlexibeeAttachmentFormView(FlexibeeItemInlineFormView):
+    def save_obj(self, obj, change):
+        print 'is change'
+        print change
+
+        # TODO: solve change
+        self.pre_save_obj(obj, change)
+        if not change:
+            obj.save()
+        self.post_save_obj(obj, change)
+
+class FlexibeeAttachmentFormViewMixin(FlexibeeItemInlineFormViewMixin):
     form_class = FlexibeeAttachmentForm
 
 
