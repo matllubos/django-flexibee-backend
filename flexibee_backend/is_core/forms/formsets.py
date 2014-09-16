@@ -1,5 +1,4 @@
 from django.forms.formsets import BaseFormSet
-from django.utils.functional import cached_property
 
 from is_core.forms.formsets import BaseFormSetMixin
 
@@ -29,17 +28,11 @@ class ItemBaseFormSet(BaseFormSetMixin, BaseFormSet):
         return total_form_count + len(self.queryset)
 
     def save(self, commit=True):
-        self.changed_objects = []
         self.deleted_objects = []
         forms_to_delete = self.deleted_forms
-        print 'forms_to_delete'
-        print forms_to_delete
         out = []
-
         for form in self.forms:
             if form in forms_to_delete:
-                print 'instance'
-                print form.instance
                 self.deleted_objects.append(form.instance)
             else:
                 out.append(form.save())

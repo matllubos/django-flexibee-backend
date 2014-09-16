@@ -4,7 +4,7 @@ from is_core.filters.default_filters import DefaultFieldFilter
 
 from dateutil.parser import parse
 
-from flexibee_backend.db.models import FlexibeeModel
+from flexibee_backend.models import FlexibeeModel
 
 
 class DateFilter(DefaultFieldFilter):

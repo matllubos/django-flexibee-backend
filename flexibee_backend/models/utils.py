@@ -1,5 +1,6 @@
 from django.db import models
 from django.utils.functional import SimpleLazyObject
+
 from flexibee_backend.db.utils import get_db_name, set_db_name
 
 

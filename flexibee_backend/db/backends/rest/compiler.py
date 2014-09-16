@@ -15,11 +15,10 @@ from dateutil.parser import parse
 
 from .connection import RestQuery
 
-from flexibee_backend.db.models import StoreViaForeignKey, CompanyForeignKey, RemoteFileField
-from flexibee_backend.db.models.fields import ItemsField
+from flexibee_backend.models import StoreViaForeignKey, CompanyForeignKey, RemoteFileField
+from flexibee_backend.models.fields import ItemsField
 from flexibee_backend.db.backends.rest.filters import (ElementaryFilter, NotFilter, AndFilter,
                                                        OrFilter)
-from flexibee_backend.db.models.utils import lazy_obj_loader
 
 # TODO: Change this to match your DB
 # Valid query types (a dictionary is used for speedy lookups).

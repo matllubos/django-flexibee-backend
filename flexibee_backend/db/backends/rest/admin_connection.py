@@ -8,12 +8,12 @@ import random
 from django.conf import settings
 from django.db.models.fields import FieldDoesNotExist
 from django.template.defaultfilters import slugify
+from django.utils.http import urlquote
 
 from flexibee_backend.db.backends.rest.exceptions import SyncException
 from flexibee_backend import config
 from flexibee_backend.db.backends.rest.compiler import SQLDataCompiler
 from flexibee_backend.db.backends.rest.connection import decimal_default
-from django.utils.http import urlquote
 
 
 class FlexibeeAdminConnector(object):
