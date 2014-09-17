@@ -35,6 +35,9 @@ class FlexibeeItemInlineFormViewMixin(object):
     """
 
     def get_formset(self, instance, data, files):
+        """
+        Rewrited because there is different formset factory
+        """
         extra = self.get_extra()
 
         Formset = formset_factory(self.form_class, formset=ItemBaseFormSet, extra=extra)
@@ -48,11 +51,23 @@ class FlexibeeItemInlineFormViewMixin(object):
         formset.can_delete = self.get_can_delete()
 
         for form in formset:
-            # TODO: solve exception
-            # form.class_names = self.form_class_names(form)
-            # self.form_fields(form)
-            pass
+            form.class_names = self.form_class_names(form)
+            self.form_fields(form)
         return formset
+
+    def form_field(self, form, field_name, form_field):
+        """
+        Rewrited because there is no model
+        """
+        return form_field
+
+    def form_class_names(self, form):
+        """
+        Rewrited because there is no model
+        """
+        if not form.instance:
+            return ['empty']
+        return []
 
     def get_queryset(self, instance):
         """
@@ -61,9 +76,12 @@ class FlexibeeItemInlineFormViewMixin(object):
         raise NotImplementedError
 
     def form_valid(self, request):
+        """
+        Rewrited because is_changed is get with different way
+        """
         instances = self.formset.save(commit=False)
         for obj in instances:
-            self.save_obj(obj, obj.stored)
+            self.save_obj(obj, obj.is_stored)
         for obj in self.formset.deleted_objects:
             self.delete_obj(obj)
 
@@ -72,15 +90,6 @@ class FlexibeeItemInlineFormViewMixin(object):
         Should contain human readable name for adding button
         """
         raise NotImplementedError
-
-    def save_obj(self, obj, change):
-        """
-        Flexibee item can not be changed
-        """
-        if not change:
-            self.pre_save_obj(obj, change)
-            obj.save()
-            self.post_save_obj(obj, change)
 
 
 class FlexibeeAttachmentFormViewMixin(FlexibeeItemInlineFormViewMixin):

@@ -1,16 +1,17 @@
-from django.forms.widgets import ClearableFileInput
+from django.forms.widgets import ClearableFileInput, Widget
 from django.utils.html import format_html
 from django.utils.encoding import force_text
 from django.utils.safestring import mark_safe
 from django.utils.http import urlquote
 
 
-class ImmutableWidgetMixin(object):
+class EmptyWidget(Widget):
+    """
+    Empty widget is used for inline form fields where value can not be set for first save of the object
+    """
 
     def render(self, name, value, attrs=None):
-        if value:
-            return value
-        return super(ImmutableWidgetMixin, self).render(name, value, attrs=attrs)
+        return ''
 
 
 class AttachementWidget(ClearableFileInput):

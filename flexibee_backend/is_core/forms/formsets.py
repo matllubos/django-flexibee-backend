@@ -34,7 +34,8 @@ class ItemBaseFormSet(BaseFormSetMixin, BaseFormSet):
         for form in self.forms:
             if form in forms_to_delete:
                 self.deleted_objects.append(form.instance)
-            else:
+            elif form.has_changed():
+                print form.has_changed()
                 out.append(form.save())
         return out
 

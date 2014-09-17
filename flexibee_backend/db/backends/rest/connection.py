@@ -210,51 +210,60 @@ class ModelConnector(BaseConnector):
 
 class AttachmentConnector(BaseConnector):
 
-    def read(self, table_name, id, attachment_id=None):
+    def read(self, table_name, parent_id, pk=None):
         self._check_settings(table_name)
 
-        extra = '/%s/prilohy' % id
-        if attachment_id:
-            extra = '/'.join((extra, str(attachment_id)))
+        extra = '/%s/prilohy' % parent_id
+        if pk:
+            extra = '/'.join((extra, str(pk)))
 
         url = self.URL % {'hostname': self.hostname, 'db_name': self.db_name,
-                          'table_name': table_name, 'query_string': 'detail=custom:id,contentType,nazSoub,contentType',
+                          'table_name': table_name,
+                          'query_string': 'detail=custom:id,contentType,nazSoub,contentType,poznam,link',
                           'extra': extra, 'type': 'json'}
         r = requests.get(url, auth=(self.username, self.password))
         return r.json().get('winstrom').get('priloha')
 
-    def write(self, table_name, id, filename, file, content_type):
+    def write(self, table_name, parent_id, data):
         self._check_settings(table_name)
+        pk = data.pop('pk', None)
+        if not pk:
+            url = 'https://%(hostname)s/c/%(db_name)s/%(table_name)s/%(parent_id)s/prilohy/new/%(filename)s'
+            url = url % {'hostname': self.hostname, 'db_name': self.db_name,
+                         'table_name': table_name, 'parent_id': parent_id, 'filename': data.get('nazSoub')}
+            headers = {'content-type': data.get('contentType')}
+            r = requests.put(url, data=data['file'].read(), headers=headers,
+                             auth=(self.username, self.password))
+        else:
+            url = 'https://%(hostname)s/c/%(db_name)s/%(table_name)s/%(parent_id)s/prilohy/%(pk)s.json'
+            url = url % {'hostname': self.hostname, 'db_name': self.db_name,
+                         'table_name': table_name, 'parent_id': parent_id, 'pk': pk}
+            data = {'winstrom': {'priloha': data}}
+            headers = {'Accept': 'application/json'}
+            r = requests.put(url, data=self._serialize(data), headers=headers, auth=(self.username, self.password))
 
-        url = 'https://%(hostname)s/c/%(db_name)s/%(table_name)s/%(id)s/prilohy/new/%(filename)s'
-        self._check_settings(table_name)
-        url = url % {'hostname': self.hostname, 'db_name': self.db_name,
-                     'table_name': table_name, 'id': id, 'filename': filename}
-        headers = {'content-type': content_type}
-
-        r = requests.put(url, files={'file':file}, headers=headers, auth=(self.username, self.password))
         if r.status_code not in [200, 201]:
             self.logger.warning('Response %s, content: %s' % (r.status_code, force_text(r.text)))
             raise FlexibeeDatabaseException('Rest PUT method error', r, url)
 
-    def delete(self, table_name, id, attachment_id):
+    def delete(self, table_name, parent_id, pk):
         self._check_settings(table_name)
 
-        url = 'https://%(hostname)s/c/%(db_name)s/%(table_name)s/%(id)s/prilohy/%(attachment_id)s.json'
+        url = 'https://%(hostname)s/c/%(db_name)s/%(table_name)s/%(parent_id)s/prilohy/%(pk)s.json'
         self._check_settings(table_name)
         url = url % {'hostname': self.hostname, 'db_name': self.db_name,
-                     'table_name': table_name, 'id': id, 'attachment_id': attachment_id}
+                     'table_name': table_name, 'parent_id': parent_id, 'pk': pk}
         r = requests.delete(url, auth=(self.username, self.password))
         if r.status_code not in [200, 201]:
             self.logger.warning('Response %s, content: %s' % (r.status_code, force_text(r.text)))
             raise FlexibeeDatabaseException('Rest DELETE method error', r, url)
 
-    def get_response(self, table_name, id, attachment_id):
+    def get_response(self, table_name, parent_id, pk):
         self._check_settings(table_name)
 
-        url = 'https://%(hostname)s/c/%(db_name)s/%(table_name)s/%(id)s/prilohy/%(attachment_id)s/content'
+        url = 'https://%(hostname)s/c/%(db_name)s/%(table_name)s/%(parent_id)s/prilohy/%(pk)s/content'
         url = url % {'hostname': self.hostname, 'db_name': self.db_name,
-                     'table_name': table_name, 'id': id, 'attachment_id': attachment_id}
+                     'table_name': table_name, 'parent_id': parent_id, 'pk': pk}
         return requests.get(url, auth=(self.username, self.password))
 
 
@@ -282,7 +291,7 @@ class RelationConnector(BaseConnector):
         url = url % {'hostname': self.hostname, 'db_name': self.db_name,
                      'table_name': table_name, 'id': id}
 
-        data = {'winstrom': {table_name: data}}
+        data = {'winstrom': {table_name: {'odparovani': data}}}
         r = requests.put(url, data=self._serialize(data), auth=(self.username, self.password))
         if r.status_code not in [200, 201]:
             self.logger.warning('Response %s, content: %s' % (r.status_code, force_text(r.text)))
@@ -296,7 +305,7 @@ class RelationConnector(BaseConnector):
         url = url % {'hostname': self.hostname, 'db_name': self.db_name,
                      'table_name': table_name, 'id': id}
 
-        data = {'winstrom': {table_name: data}}
+        data = {'winstrom': {table_name: {'sparovani': data}}}
         r = requests.put(url, data=self._serialize(data), auth=(self.username, self.password))
         if r.status_code not in [200, 201]:
             self.logger.warning('Response %s, content: %s' % (r.status_code, force_text(r.text)))

@@ -15,6 +15,7 @@ from flexibee_backend.db.backends.rest.exceptions import SyncException, Flexibee
 from flexibee_backend.db.backends.rest.connection import AttachmentConnector, RelationConnector
 from flexibee_backend import config
 from flexibee_backend.models.utils import get_model_by_db_table, lazy_obj_loader
+from django.core.files.uploadedfile import InMemoryUploadedFile
 
 
 class FlexibeeItem(object):
@@ -23,7 +24,7 @@ class FlexibeeItem(object):
     """
 
     connector_class = None
-    stored = False
+    is_stored = False
 
     def __init__(self, instance, connector, data=None, **kwargs):
         self.instance = instance
@@ -49,23 +50,38 @@ class FlexibeeItem(object):
 
     def delete(self):
         self._delete()
-        self.stored = False
+        self.is_stored = False
 
     def save(self):
+        self.validate()
         self._save()
-        self.stored = True
+        self.is_stored = True
+
+    # TODO: validation should be better for future
+    def validate(self):
+        """
+        Should contains pre_save validation, this is more for developers than for users,
+        input data should be valid
+        """
+        pass
 
     def _delete(self):
         """
-        There should be added code which implements calls connector for deleting object
+        There may be changed code which implements calls connector for deleting object
         """
-        raise NotImplementedError
+        try:
+            self.connector.delete(self.instance._meta.db_table, self.instance.pk, self.pk)
+        except FlexibeeDatabaseException as ex:
+            raise ValidationError(ex.errors)
 
     def _save(self):
         """
-        There should be added code which implements calls connector for creating or updating object
+        There may be changed code which implements calls connector for creating or updating object
         """
-        raise NotImplementedError
+        try:
+            self.connector.write(self.instance._meta.db_table, self.instance.pk, self._encode())
+        except FlexibeeDatabaseException as ex:
+            raise ValidationError(ex.errors)
 
     def __str__(self):
         return self.__unicode__()
@@ -80,23 +96,40 @@ class Attachment(FlexibeeItem):
 
     filename = None
     file = None
+    content_type = None
+    description = None
+    link = None
+    pk = None
 
     def _decode(self, data):
-        self.filename = data.get('nazSoub')
-        self.content_type = data.get('contentType')
         self.pk = data.get('id')
+        self.filename = data.get('nazSoub')
+        self.content_type = data.get('contentType', 'content/unknown')
+        self.link = data.get('link')
+        self.description = data.get('poznam')
+
+    def _encode(self):
+        data = {'poznam': self.description, 'link': self.link, 'nazSoub': self.filename}
+        if not self.pk:
+            data['file'] = self.file
+            data['contentType'] = self.content_type
+        else:
+            data['pk'] = self.pk
+        return data
 
     def __unicode__(self):
         return self.filename
 
-    def _delete(self):
-        self.connector.delete(self.instance._meta.db_table, self.instance.pk, self.pk)
+    def validate(self):
+        errors = {}
+        if self.is_stored and not self.file:
+            errors['file'] = _('File must be set for creation.')
 
-    def _save(self):
-        if not self.file or not self.filename:
-            raise ValidationError('File and filename is required.')
-        self.connector.write(self.instance._meta.db_table, self.instance.pk, self.filename, self.file,
-                             self.content_type)
+        if not self.filename:
+            errors['filename'] = _('Filename must be set')
+
+        if errors:
+            raise ValidationError(errors)
 
     @property
     def file_response(self):
@@ -134,6 +167,7 @@ class Relation(FlexibeeItem):
     invoice = None
     payment = None
     remain = None
+    pk = None
 
     def __init__(self, instance, connector, data=None, **kwargs):
         super(Relation, self).__init__(instance, connector, data, **kwargs)
@@ -153,6 +187,7 @@ class Relation(FlexibeeItem):
         elif self.instance._meta.db_table in ['faktura-vydana', 'faktura-prijata']:
             self.payment = self._get_related_obj(data, 'b')
         self.type = data['typVazbyK']
+        self.pk = data['id']
         self.sum = decimal.Decimal(data['castka'])
 
     def _encode(self):
@@ -166,23 +201,28 @@ class Relation(FlexibeeItem):
         return '%s %s' % (self.invoice, self.instance)
 
     def _delete(self):
+        """
+        Rewrited delete because it needs data for delete relation via payment
+        """
         try:
-            self.connector.delete(self.payment._meta.db_table, self.payment.pk, {'odparovani': self._encode()})
+            self.connector.delete(self.payment._meta.db_table, self.payment.pk, self._encode())
         except FlexibeeDatabaseException as ex:
             raise ValidationError(ex.errors)
 
-    def _save(self):
-        if not self.remain or not self.invoice:
-            raise ValidationError('Remain and invoice is required.')
+    def validate(self):
+        if self.is_stored:
+            raise ValidationError(_('Existing relation cannot be changed.'))
 
-        try:
-            if not self.invoice:
-                raise ValidationError('Invoice is required.')
-            if not self.payment:
-                raise ValidationError('Payment is required.')
-            self.connector.write(self.payment._meta.db_table, self.payment.pk, {'sparovani': self._encode()})
-        except FlexibeeDatabaseException as ex:
-            raise ValidationError(ex.errors)
+        errors = {}
+        if not self.remain:
+            errors['remain'] = _('Remain is required.')
+        if not self.invoice:
+            errors['invoice'] = _('Invoice is required.')
+        if not self.payment:
+            errors['payment'] = _('Payment is required.')
+
+        if errors:
+            raise ValidationError(errors)
 
 
 class OptionsLazy(object):
