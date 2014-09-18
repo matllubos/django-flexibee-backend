@@ -5,6 +5,7 @@ from django.http.response import HttpResponse
 
 from flexibee_backend.db.utils import (get_connector, get_db_name)
 from flexibee_backend.db.backends.rest.connection import ModelConnector
+from flexibee_backend.db.backends.rest.exceptions import FlexibeeDatabaseException
 
 
 class CompanyForeignKey(ForeignKey):
@@ -54,12 +55,15 @@ class ItemsManager(object):
 
     @property
     def connector(self):
-        if self._connector is None:
+        if self.instance.pk and self._connector is None:
             self._connector = get_connector(self.item_class.connector_class,
                                             self.instance.flexibee_company.flexibee_db_name)
         return self._connector
 
     def all(self):
+        if not self.instance.pk:
+            return []
+
         data = self.connector.read(self.instance._meta.db_table, self.instance.pk)
 
         items_list = []
@@ -69,14 +73,23 @@ class ItemsManager(object):
         return items_list
 
     def create(self, **kwargs):
+        if not self.instance.pk:
+            return FlexibeeDatabaseException('You cannot create item of not saved instance')
+
         item = self.add(**kwargs)
         item.save()
         return item
 
     def add(self, **kwargs):
+        if not self.instance.pk:
+            return FlexibeeDatabaseException('You cannot add item to not saved instance')
+
         return self.item_class(self.instance, self.connector, **kwargs)
 
     def get(self, pk):
+        if not self.instance.pk:
+            raise ObjectDoesNotExist
+
         data = self.connector.read(self.instance._meta.db_table, self.instance.pk, pk)
         if not data:
             raise ObjectDoesNotExist
