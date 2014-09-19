@@ -69,7 +69,7 @@ class FlexibeeItemInlineFormViewMixin(object):
             return ['empty']
         return []
 
-    def get_queryset(self, instance):
+    def get_queryset(self):
         """
         Should return list of items related to instance
         """
@@ -99,4 +99,4 @@ class FlexibeeAttachmentFormViewMixin(FlexibeeItemInlineFormViewMixin):
         return _('attachement')
 
     def get_queryset(self, instance):
-        return instance.attachments.all()
+        return self.parent_instance.attachments.all()

@@ -19,6 +19,7 @@ from flexibee_backend.models import StoreViaForeignKey, CompanyForeignKey, Remot
 from flexibee_backend.models.fields import ItemsField
 from flexibee_backend.db.backends.rest.filters import (ElementaryFilter, NotFilter, AndFilter,
                                                        OrFilter)
+from django.db.models.fields import NOT_PROVIDED
 
 # TODO: Change this to match your DB
 # Valid query types (a dictionary is used for speedy lookups).
@@ -131,7 +132,6 @@ class BackendQuery(NonrelQuery):
 
         db_value = self.compiler.convert_filter_value_for_db(field.get_internal_type(), value)
         return ElementaryFilter(field.db_column or field.get_attname(), op, db_value, negated)
-
 
     def _generate_filter(self, filters):
         children = self._get_children(filters.children)
@@ -292,6 +292,26 @@ class SQLCompiler(SQLDataCompiler, NonrelCompiler):
                  self.query.alias_refcount[a]]) > 1 or
             self.query.distinct or (self.query.extra and self.query.extra != {'a': (u'1', [])}) or self.query.having):
             raise DatabaseError("This query is not supported by the database.")
+
+    def _make_result(self, entity, fields):
+        """
+        Decodes values for the given fields from the database entity.
+
+        The entity is assumed to be a dict using field database column
+        names as keys. Decodes values using `value_from_db` as well as
+        the standard `convert_values`.
+        """
+        result = []
+        for field in fields:
+            value = entity.get(field.column, NOT_PROVIDED)
+            if value is NOT_PROVIDED:
+                value = field.get_default()
+            else:
+                value = self.ops.value_from_db(value, field)
+                value = self.query.convert_values(value, field,
+                                                  self.connection)
+            result.append(value)
+        return result
 
 
 # This handles both inserts and updates of individual entities
