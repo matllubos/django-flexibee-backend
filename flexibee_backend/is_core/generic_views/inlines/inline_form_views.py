@@ -42,10 +42,10 @@ class FlexibeeItemInlineFormViewMixin(object):
 
         Formset = formset_factory(self.form_class, formset=ItemBaseFormSet, extra=extra)
         if data:
-            formset = Formset(instance, self.get_queryset(instance), data=data, files=files,
+            formset = Formset(instance, self.get_queryset(), data=data, files=files,
                                                    prefix=self.get_prefix())
         else:
-            formset = Formset(instance, self.get_queryset(instance), prefix=self.get_prefix())
+            formset = Formset(instance, self.get_queryset(), prefix=self.get_prefix())
 
         formset.can_add = self.get_can_add()
         formset.can_delete = self.get_can_delete()
@@ -69,7 +69,7 @@ class FlexibeeItemInlineFormViewMixin(object):
             return ['empty']
         return []
 
-    def get_queryset(self, instance):
+    def get_queryset(self):
         """
         Should return list of items related to instance
         """
@@ -98,5 +98,5 @@ class FlexibeeAttachmentFormViewMixin(FlexibeeItemInlineFormViewMixin):
     def get_name(self):
         return _('attachement')
 
-    def get_queryset(self, instance):
-        return instance.attachments.all()
+    def get_queryset(self):
+        return self.parent_instance.attachments.all()

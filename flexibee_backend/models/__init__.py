@@ -8,14 +8,14 @@ from django.utils.translation import ugettext_lazy as _
 from django.db.models.base import ModelBase
 from django.utils.functional import SimpleLazyObject
 from django.core.exceptions import ValidationError
+from django.core.files.uploadedfile import InMemoryUploadedFile
 
 from flexibee_backend.db.backends.rest.utils import db_name_validator
 from flexibee_backend.db.backends.rest.admin_connection import admin_connector
-from flexibee_backend.db.backends.rest.exceptions import SyncException, FlexibeeDatabaseException
+from flexibee_backend.db.backends.rest.exceptions import SyncException
 from flexibee_backend.db.backends.rest.connection import AttachmentConnector, RelationConnector
 from flexibee_backend import config
 from flexibee_backend.models.utils import get_model_by_db_table, lazy_obj_loader
-from django.core.files.uploadedfile import InMemoryUploadedFile
 
 
 class FlexibeeItem(object):
