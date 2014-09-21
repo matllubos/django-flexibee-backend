@@ -246,7 +246,7 @@ class Options(object):
 class FlexibeeOptions(Options):
 
     def __getattr__(self, name):
-        models = [b for b in self.model.__mro__ if issubclass(b, FlexibeeModel)]
+        models = [b for b in self.model.__mro__ if issubclass(b, (FlexibeeModel, Company))]
         for model in models:
             value = getattr(model.FlexibeeMeta, name, None)
             if value is not None:
@@ -257,6 +257,8 @@ class Company(models.Model):
 
     flexibee_db_name = models.CharField(verbose_name=_('DB name'), null=False, blank=True, max_length=100,
                                         unique=True, validators=[db_name_validator])
+
+    _flexibee_meta = OptionsLazy('_flexibee_meta', FlexibeeOptions)
 
     class Meta:
         abstract = True
