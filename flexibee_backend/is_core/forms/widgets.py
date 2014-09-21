@@ -4,6 +4,8 @@ from django.utils.encoding import force_text
 from django.utils.safestring import mark_safe
 from django.utils.http import urlquote
 
+from flexibee_backend.models import Attachment
+
 
 class EmptyWidget(Widget):
     """
@@ -14,13 +16,13 @@ class EmptyWidget(Widget):
         return ''
 
 
-class AttachementWidget(ClearableFileInput):
+class AttachmentWidget(ClearableFileInput):
 
     def attachment_url(self, attachment):
         return 'attachment/%s__%s' % (attachment.pk, urlquote(attachment.filename))
 
     def render(self, name, value, attrs=None):
-        if value:
+        if value and isinstance(value, Attachment):
             return mark_safe(format_html(self.url_markup_template, self.attachment_url(value), force_text(value)))
 
         substitutions = {

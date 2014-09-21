@@ -1,3 +1,4 @@
+from django.db import models
 from django.db.models.fields.related import ForeignKey
 from django.db.models.fields import Field
 from django.core.exceptions import ObjectDoesNotExist
@@ -23,6 +24,7 @@ class CompanyForeignKey(ForeignKey):
 class StoreViaForeignKey(ForeignKey):
 
     def __init__(self, to, db_relation_name=None, *args, **kwargs):
+        kwargs['on_delete'] = models.DO_NOTHING
         super(StoreViaForeignKey, self).__init__(to, *args, **kwargs)
         self.db_relation_name = db_relation_name
 
@@ -74,15 +76,21 @@ class ItemsManager(object):
 
     def create(self, **kwargs):
         if not self.instance.pk:
-            return FlexibeeDatabaseException('You cannot create item of not saved instance')
+            raise FlexibeeDatabaseException('You cannot create item of not saved instance')
 
         item = self.add(**kwargs)
         item.save()
         return item
 
+    def delete(self):
+        if not self.instance.pk:
+            raise FlexibeeDatabaseException('You cannot Delete items of not saved instance')
+        for item in self.all():
+            item.delete()
+
     def add(self, **kwargs):
         if not self.instance.pk:
-            return FlexibeeDatabaseException('You cannot add item to not saved instance')
+            raise FlexibeeDatabaseException('You cannot add item to not saved instance')
 
         return self.item_class(self.instance, self.connector, **kwargs)
 
@@ -130,7 +138,7 @@ class ItemsDescriptor(object):
                 'The "%s" attribute can only be accessed from %s instance.'
                 % (self.field.name, owner.__name__))
 
-        attr = ItemsManager(instance, self.item_class)
+        attr = self.item_class.manager(instance, self.item_class)
         instance.__dict__[self.field.name] = attr
         return instance.__dict__[self.field.name]
 

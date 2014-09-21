@@ -25,6 +25,7 @@ class FlexibeeItem(object):
 
     connector_class = None
     is_stored = False
+    manager = ItemsManager
 
     def __init__(self, instance, connector, data=None, **kwargs):
         self.instance = instance
@@ -57,6 +58,9 @@ class FlexibeeItem(object):
         self._save()
         self.is_stored = True
 
+    def _update_via(self):
+        return self.instance
+
     # TODO: validation should be better for future
     def validate(self):
         """
@@ -70,7 +74,8 @@ class FlexibeeItem(object):
         There may be changed code which implements calls connector for deleting object
         """
         try:
-            self.connector.delete(self.instance._meta.db_table, self.instance.pk, self.pk)
+            update_via = self._update_via()
+            self.connector.delete(update_via._meta.db_table, update_via.pk, self.pk)
         except FlexibeeDatabaseException as ex:
             raise ValidationError(ex.errors)
 
@@ -79,7 +84,8 @@ class FlexibeeItem(object):
         There may be changed code which implements calls connector for creating or updating object
         """
         try:
-            self.connector.write(self.instance._meta.db_table, self.instance.pk, self._encode())
+            update_via = self._update_via()
+            self.connector.write(update_via._meta.db_table, update_via.pk, self._encode())
         except FlexibeeDatabaseException as ex:
             raise ValidationError(ex.errors)
 
@@ -136,8 +142,21 @@ class Attachment(FlexibeeItem):
         if not self.instance or not self.connector:
             raise AttributeError('The %s attachment must be firstly stored.' % (self.filename))
 
-        r = self.connector.get_response(self.instance._meta.db_table, self.instance.pk, self.pk)
+        update_via = self._update_via()
+        r = self.connector.get_response(update_via._meta.db_table, update_via.pk, self.pk)
         return HttpResponse(r.content, content_type=r.headers['content-type'])
+
+
+class RelationManager(ItemsManager):
+
+    def delete(self):
+        if not self.instance.pk:
+            raise FlexibeeDatabaseException('You cannot Delete items of not saved instance')
+
+        if self.instance._meta.db_table in ['pokladni-pohyb', 'banka']:
+            self.connector.delete(self.instance._meta.db_table, self.instance.pk, [])
+        else:
+            super(RelationManager, self).delete()
 
 
 class Relation(FlexibeeItem):
@@ -167,7 +186,11 @@ class Relation(FlexibeeItem):
     invoice = None
     payment = None
     remain = None
+    sum = None
+    currency_sum = None
     pk = None
+
+    manager = RelationManager
 
     def __init__(self, instance, connector, data=None, **kwargs):
         super(Relation, self).__init__(instance, connector, data, **kwargs)
@@ -176,9 +199,17 @@ class Relation(FlexibeeItem):
         elif self.instance._meta.db_table in ['faktura-vydana', 'faktura-prijata']:
             self.invoice = self.instance
 
+    def _get_related_db_table(self, data, field_name):
+        return data['%s@ref' % field_name].split('/')[-2]
+
+    def _get_related_pk(self, data, field_name):
+        return data['%s@ref' % field_name].split('/')[-1][:-5]
+
     def _get_related_obj(self, data, field_name):
-        related_model = get_model_by_db_table(data['%s@ref' % field_name].split('/')[-2])
-        return lazy_obj_loader(related_model, {'pk': data['%s@ref' % field_name].split('/')[-1][:-5]},
+        related_model = get_model_by_db_table(self._get_related_db_table(data, field_name))
+        if related_model is None:
+            return None
+        return lazy_obj_loader(related_model, {'pk': self._get_related_pk(data, field_name)},
                                self.instance.flexibee_company.flexibee_db_name)
 
     def _decode(self, data):
@@ -189,6 +220,8 @@ class Relation(FlexibeeItem):
         self.type = data['typVazbyK']
         self.pk = data['id']
         self.sum = decimal.Decimal(data['castka'])
+        if 'castkaMen' in data:
+            self.currency_sum = decimal.Decimal(data['castkaMen'])
 
     def _encode(self):
         data = {}
@@ -198,16 +231,24 @@ class Relation(FlexibeeItem):
         return data
 
     def __unicode__(self):
-        return '%s %s' % (self.invoice, self.instance)
+        return 'Invoice: %s Payment: %s, %s' % (self.invoice, self.payment, self.currency_sum)
 
     def _delete(self):
         """
-        Rewrited delete because it needs data for delete relation via payment
+        Rewritten delete because it needs data for delete relation via payment
         """
+
         try:
-            self.connector.delete(self.payment._meta.db_table, self.payment.pk, self._encode())
+            update_via = self._update_via()
+            if update_via is None:
+                raise ValidationError(_('Relation without payment cannot be deleted.'))
+
+            self.connector.delete(update_via._meta.db_table, update_via.pk, self._encode())
         except FlexibeeDatabaseException as ex:
             raise ValidationError(ex.errors)
+
+    def _update_via(self):
+        return self.payment
 
     def validate(self):
         if self.is_stored:

@@ -134,6 +134,8 @@ class ModelConnector(BaseConnector):
             data = r.json().get('winstrom')
             self._add_to_cache(table_name, filters, fields, relations, ordering, offset, base, data)
             return data
+        elif self._is_request_for_one_object(filters) and r.status_code == 404:
+            return {table_name:[]}
         else:
             self.logger.warning('Response %s, content: %s' % (r.status_code, force_text(r.text)))
             raise FlexibeeDatabaseException('Rest GET method error', r, url)
@@ -277,7 +279,8 @@ class RelationConnector(BaseConnector):
             extra = '/'.join((extra, str(relation_id)))
 
         url = self.URL % {'hostname': self.hostname, 'db_name': self.db_name,
-                          'table_name': table_name, 'query_string': '',
+                          'table_name': table_name,
+                          'query_string': 'detail=custom:id,a,b,typVazbyK,castka,castkaMen',
                           'extra': extra, 'type': 'json'}
 
         r = requests.get(url, auth=(self.username, self.password))
@@ -410,7 +413,7 @@ class RestQuery(object):
             store_view_db_query.add_filter(ElementaryFilter('id', '=',
                                                             obj_data.get(self.via_fk_name), False))
             via_data = store_view_db_query.fetch(0, 0, extra_fields=['%s(id)' % self.via_relation_name])[0]
-            db_related_objs = via_data[self.via_relation_name]
+            db_related_objs = via_data.get(self.via_relation_name, [])
 
             via_data[self.via_relation_name] = []
 

@@ -18,10 +18,15 @@ class FlexibeeDatabaseException(DatabaseError):
     @property
     def errors(self):
         errors = []
-        for result in self.json_data.get('results'):
-            if 'errors' in result:
-                for error_dict in result.get('errors'):
-                    errors.append(error_dict.get('message'))
+
+        if 'message' in self.json_data:
+            errors.append(self.json_data.get('message'))
+
+        if 'results' in self.json_data:
+            for result in self.json_data.get('results'):
+                if 'errors' in result:
+                    for error_dict in result.get('errors'):
+                        errors.append(error_dict.get('message'))
         return '\n'.join(errors)
 
 

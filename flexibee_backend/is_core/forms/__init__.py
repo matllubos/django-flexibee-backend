@@ -3,7 +3,7 @@ from django.utils.translation import ugettext_lazy as _
 
 from is_core.forms import RestFormMixin
 
-from flexibee_backend.is_core.forms.widgets import AttachementWidget, EmptyWidget
+from flexibee_backend.is_core.forms.widgets import AttachmentWidget, EmptyWidget
 
 
 class FlexibeeItemForm(RestFormMixin, forms.Form):
@@ -30,7 +30,7 @@ class FlexibeeAttachmentForm(FlexibeeItemForm):
     Form for adding attachement to flexibee models
     """
 
-    file = forms.FileField(label=_('Attachment'), required=False, widget=AttachementWidget)
+    file = forms.FileField(label=_('Attachment'), required=True, widget=AttachmentWidget)
     link = forms.URLField(label=_('Link'), required=False)
     description = forms.CharField(label=_('Description'), required=False)
 
@@ -46,7 +46,7 @@ class FlexibeeAttachmentForm(FlexibeeItemForm):
         initial['description'] = instance.description
         return initial
 
-    def save(self, commit=False):
+    def save(self, commit=True):
         description = self.cleaned_data.get('description')
         link = self.cleaned_data.get('link')
         if not self.instance:
@@ -57,4 +57,6 @@ class FlexibeeAttachmentForm(FlexibeeItemForm):
         self.instance.link = link
         self.instance.description = description
 
+        if commit:
+            self.instance.save()
         return self.instance

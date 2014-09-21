@@ -33,9 +33,12 @@ class ItemBaseFormSet(BaseFormSetMixin, BaseFormSet):
         out = []
         for form in self.forms:
             if form in forms_to_delete:
-                self.deleted_objects.append(form.instance)
+                if form.instance:
+                    self.deleted_objects.append(form.instance)
+                    if commit:
+                        form.instance.delete()
             elif form.has_changed():
-                out.append(form.save())
+                out.append(form.save(commit=commit))
         return out
 
     def _construct_form(self, i, **kwargs):
