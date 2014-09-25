@@ -1,4 +1,4 @@
-from django.core.urlresolvers import reverse
+from django.core.urlresolvers import reverse, NoReverseMatch
 
 from is_core.patterns import RestPattern, UIPattern
 
@@ -14,10 +14,12 @@ class FlexibeePattern(object):
     def get_url_string(self, request, obj=None, kwargs=None):
         kwargs = kwargs or {}
         kwargs.update(self.get_kwargs(request))
-        if obj:
-            kwargs.update(self._get_try_kwarg(obj))
-        return reverse(self.pattern, kwargs=kwargs)
-
+        try:
+            if obj:
+                kwargs.update(self._get_try_kwarg(obj))
+            return reverse(self.pattern, kwargs=kwargs)
+        except NoReverseMatch:
+            return None
 
 class FlexibeeRestPattern(FlexibeePattern, RestPattern):
     pass

@@ -8,23 +8,26 @@ from django.utils.translation import ugettext_lazy as _
 from django.db.models.base import ModelBase
 from django.utils.functional import SimpleLazyObject
 from django.core.exceptions import ValidationError
+from django.core.files.uploadedfile import InMemoryUploadedFile
+
+from piston.models import RestModel
 
 from flexibee_backend.db.backends.rest.utils import db_name_validator
 from flexibee_backend.db.backends.rest.admin_connection import admin_connector
-from flexibee_backend.db.backends.rest.exceptions import SyncException, FlexibeeDatabaseException
+from flexibee_backend.db.backends.rest.exceptions import SyncException
 from flexibee_backend.db.backends.rest.connection import AttachmentConnector, RelationConnector
 from flexibee_backend import config
 from flexibee_backend.models.utils import get_model_by_db_table, lazy_obj_loader
-from django.core.files.uploadedfile import InMemoryUploadedFile
 
 
-class FlexibeeItem(object):
+class FlexibeeItem(RestModel):
     """
     Class which represents model for objects which is firmly connected to other real db model
     """
 
     connector_class = None
     is_stored = False
+    id = None
 
     def __init__(self, instance, connector, data=None, **kwargs):
         self.instance = instance
@@ -102,7 +105,7 @@ class Attachment(FlexibeeItem):
     pk = None
 
     def _decode(self, data):
-        self.pk = data.get('id')
+        self.pk = self.id = data.get('id')
         self.filename = data.get('nazSoub')
         self.content_type = data.get('contentType', 'content/unknown')
         self.link = data.get('link')
@@ -187,7 +190,7 @@ class Relation(FlexibeeItem):
         elif self.instance._meta.db_table in ['faktura-vydana', 'faktura-prijata']:
             self.payment = self._get_related_obj(data, 'b')
         self.type = data['typVazbyK']
-        self.pk = data['id']
+        self.pk = self.id = data['id']
         self.sum = decimal.Decimal(data['castka'])
 
     def _encode(self):

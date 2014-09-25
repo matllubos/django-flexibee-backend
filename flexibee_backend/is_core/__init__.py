@@ -19,6 +19,8 @@ from flexibee_backend.is_core.patterns import (FlexibeeRestPattern, FlexibeeUIPa
 from flexibee_backend import config
 from flexibee_backend.db.backends.rest.exceptions import FlexibeeDatabaseException
 from flexibee_backend.is_core.views import AttachmentFileView
+from flexibee_backend.is_core.rest.resource import FlexibeeItemRestResource
+from is_core.utils import get_new_class_name
 
 
 class FlexibeeIsCore(UIRestModelISCore):
@@ -52,6 +54,12 @@ class FlexibeeIsCore(UIRestModelISCore):
     def get_url_prefix(self):
         return 'company/(?P<company_pk>[-\w]+)/%s' % '/'.join(self.get_menu_groups())
 
+
+    def flexibee_rest_resource(self, klass, name):
+        return type(str(get_new_class_name('%s-%s' % (name, self.get_menu_group_pattern_name()),
+                                                      klass)),
+                                       (klass,), {})
+
     def get_resource_patterns(self):
         resource_patterns = SortedDict()
         resource_patterns['api-resource'] = FlexibeeRestPattern('api-resource-%s' % self.get_menu_group_pattern_name(),
@@ -59,6 +67,13 @@ class FlexibeeIsCore(UIRestModelISCore):
                                                                 self.rest_resource, self, ('GET', 'PUT', 'DELETE'))
         resource_patterns['api'] = FlexibeeRestPattern('api-%s' % self.get_menu_group_pattern_name(), self.site_name,
                                                        r'^/?$', self.rest_resource, self, ('GET', 'POST'))
+        Pattern = self.rest_resource_pattern_class
+        attachement_resource = self.flexibee_rest_resource(FlexibeeItemRestResource, 'api-attachement')
+        resource_patterns['api-attachement-resource'] = FlexibeeRestPattern('api-attachement-resource-%s' % self.get_menu_group_pattern_name(),
+                                                    self.site_name, r'^/(?P<pk>[-\w]+)/attachment/(?P<attachment_pk>[-\d]+)/?$', attachement_resource,
+                                                    self, ('GET', 'PUT', 'DELETE'))
+        resource_patterns['api-attachement'] = FlexibeeRestPattern('api-attachement-%s' % self.get_menu_group_pattern_name(),
+                                           self.site_name, r'/(?P<pk>[-\w]+)/attachment/?$', attachement_resource, self, ('GET', 'POST'))
         return resource_patterns
 
     def get_api_url(self, request):
