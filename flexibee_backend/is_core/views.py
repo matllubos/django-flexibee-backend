@@ -5,6 +5,8 @@ from django.http.response import Http404
 
 from is_core.generic_views import DefaultCoreViewMixin
 
+from rest.serializer import *
+
 
 class AttachmentFileView(DefaultCoreViewMixin, View):
 

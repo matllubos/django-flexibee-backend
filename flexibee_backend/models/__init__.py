@@ -64,6 +64,10 @@ class FlexibeeItem(object):
         """
         raise NotImplementedError
 
+    @property
+    def id(self):
+        return getattr(self, 'pk')
+
     def delete(self):
         self._delete()
         self.is_stored = False
@@ -100,7 +104,7 @@ class FlexibeeItem(object):
         """
         try:
             update_via = self._update_via()
-            self.connector.write(update_via._meta.db_table, update_via.pk, self._encode())
+            self.pk = self.connector.write(update_via._meta.db_table, update_via.pk, self._encode())
         except FlexibeeDatabaseException as ex:
             raise ValidationError(ex.errors)
 
@@ -327,8 +331,6 @@ class FlexibeeModel(models.Model):
 
     flexibee_company = CompanyForeignKey(config.FLEXIBEE_COMPANY_MODEL, null=True, blank=True, editable=False,
                                          on_delete=models.DO_NOTHING)
-    attachments = ItemsField(Attachment, verbose_name=_('Attachments'), null=True, blank=True, editable=False)
-
     _flexibee_meta = OptionsLazy('_flexibee_meta', FlexibeeOptions)
 
     class Meta:
@@ -338,4 +340,4 @@ class FlexibeeModel(models.Model):
         readonly_fields = []
 
     class RestMeta:
-        default_list_fields = ('id',)
+        default_general_fields = ('id',)

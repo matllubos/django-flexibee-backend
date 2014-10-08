@@ -5,25 +5,30 @@ from django.core.urlresolvers import reverse
 from django.shortcuts import get_object_or_404
 from django.db.utils import DatabaseError
 
-from is_core.main import UIRestModelISCore
+from is_core.main import UIRestModelISCore, RestModelISCore
 from is_core.generic_views.inlines.inline_form_views import TabularInlineFormView
 from is_core.generic_views.table_views import TableView
 from is_core.rest.resource import RestModelResource
-from is_core.patterns import RestPattern
+from is_core.patterns import RestPattern, DoubleRestPattern
 from is_core.generic_views.form_views import AddModelFormView, EditModelFormView
 from is_core.generic_views.exceptions import SaveObjectException
 from is_core.actions import WebAction
+from is_core.utils import get_new_class_name
 
 from flexibee_backend.is_core.patterns import (FlexibeeRestPattern, FlexibeeUIPattern, FlexibeePattern,
                                                AttachmentsFlexibeeUIPattern)
 from flexibee_backend import config
 from flexibee_backend.db.backends.rest.exceptions import FlexibeeDatabaseException
 from flexibee_backend.is_core.views import AttachmentFileView
+from flexibee_backend.is_core.rest.resource import AttachmentItemResource, RelationItemResource
+from flexibee_backend.models import Attachment
+from django.http.response import Http404
 
 
 class FlexibeeIsCore(UIRestModelISCore):
     abstract = True
     default_ui_pattern_class = FlexibeePattern
+    rest_resource_pattern_class = FlexibeeRestPattern
 
     def get_view_classes(self):
         view_classes = super(FlexibeeIsCore, self).get_view_classes()
@@ -52,21 +57,13 @@ class FlexibeeIsCore(UIRestModelISCore):
     def get_url_prefix(self):
         return 'company/(?P<company_pk>[-\w]+)/%s' % '/'.join(self.get_menu_groups())
 
-    def get_resource_patterns(self):
-        resource_patterns = SortedDict()
-        resource_patterns['api-resource'] = FlexibeeRestPattern('api-resource-%s' % self.get_menu_group_pattern_name(),
-                                                                self.site_name, r'^/(?P<pk>[-\w]+)/?$',
-                                                                self.rest_resource, self, ('GET', 'PUT', 'DELETE'))
-        resource_patterns['api'] = FlexibeeRestPattern('api-%s' % self.get_menu_group_pattern_name(), self.site_name,
-                                                       r'^/?$', self.rest_resource, self, ('GET', 'POST'))
-        return resource_patterns
-
     def get_api_url(self, request):
         return reverse(self.get_api_url_name(), args=(self.get_company(request).pk,))
 
     def get_add_url(self, request):
         if 'add' in self.ui_patterns:
-            return self.ui_patterns.get('add').get_url_string(request, kwargs={'company_pk':self.get_company(request).pk})
+            return self.ui_patterns.get('add').get_url_string(request,
+                                                              kwargs={'company_pk':self.get_company(request).pk})
 
     def menu_url(self, request):
         return reverse(('%(site_name)s:' + self.menu_url_name) % {'site_name': self.site_name},
@@ -74,3 +71,50 @@ class FlexibeeIsCore(UIRestModelISCore):
 
     def get_menu_groups(self):
         return self.menu_parent_groups + [self.menu_group]
+
+
+class ItemIsCore(RestModelISCore):
+    abstract = True
+
+    rest_resource_pattern_class = FlexibeeRestPattern
+
+    def init_request(self, request):
+        get_connection(config.FLEXIBEE_BACKEND_NAME).set_db_name('testovaci_firma_ffp')
+
+    def get_company(self, request):
+        return get_object_or_404(self.get_companies(request), pk=request.kwargs.get('company_pk'))
+
+    def get_queryset(self, request):
+        from is_core.site import get_core
+        # TODO This is not very secure
+
+        parent_core = get_core(request.kwargs['parent_group'])
+        if not parent_core:
+            raise Http404
+
+        return parent_core.get_queryset(request)
+
+    def get_url_prefix(self):
+        return (
+            'company/(?P<company_pk>[-\w]+)/(?P<parent_group>[-\w]+)/(?P<parent_pk>[-\w]+)/%s' %
+            '/'.join(self.get_menu_groups())
+        )
+
+    def rest_resource_patterns(self):
+        resource_kwargs = {
+            'site_name': self.site_name, 'menu_group': self.menu_group, 'core': self, 'register': True
+        }
+        return DoubleRestPattern(
+            'api', self.rest_resource_pattern_class, self.rest_resource_class, self, r'^/$', resource_kwargs
+        ).patterns
+
+
+class AttachmentsIsCore(ItemIsCore):
+    rest_resource_class = AttachmentItemResource
+    menu_group = 'attachment'
+
+
+class RelationIsCore(ItemIsCore):
+    rest_resource_class = RelationItemResource
+    menu_group = 'relation'
+

@@ -226,6 +226,17 @@ class AttachmentConnector(BaseConnector):
         r = requests.get(url, auth=(self.username, self.password))
         return r.json().get('winstrom').get('priloha')
 
+    def _get_last_pk(self, table_name, parent_id):
+        url = 'https://%(hostname)s/c/%(db_name)s/%(table_name)s/%(parent_id)s/prilohy.json%(extra)s'
+        url = url % {'hostname': self.hostname, 'db_name': self.db_name,
+                     'table_name': table_name, 'parent_id': parent_id,
+                     'extra': '?order=id@D&detail=custom:id'}
+        r = requests.get(url, auth=(self.username, self.password))
+        if r.status_code != 200:
+            self.logger.warning('Response %s, content: %s' % (r.status_code, force_text(r.text)))
+            raise FlexibeeDatabaseException('Rest PUT method error', r, url)
+        return r.json().get('winstrom').get('priloha')[0].get('id')
+
     def write(self, table_name, parent_id, data):
         self._check_settings(table_name)
         pk = data.pop('pk', None)
@@ -247,6 +258,8 @@ class AttachmentConnector(BaseConnector):
         if r.status_code not in [200, 201]:
             self.logger.warning('Response %s, content: %s' % (r.status_code, force_text(r.text)))
             raise FlexibeeDatabaseException('Rest PUT method error', r, url)
+
+        return pk or self._get_last_pk(table_name, parent_id)
 
     def delete(self, table_name, parent_id, pk):
         self._check_settings(table_name)
@@ -284,6 +297,7 @@ class RelationConnector(BaseConnector):
                           'extra': extra, 'type': 'json'}
 
         r = requests.get(url, auth=(self.username, self.password))
+
         return r.json().get('winstrom').get('vazba')
 
     def delete(self, table_name, id, data):

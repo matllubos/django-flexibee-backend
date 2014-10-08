@@ -46,11 +46,17 @@ class FlexibeeAttachmentForm(FlexibeeItemForm):
         initial['description'] = instance.description
         return initial
 
+    def _get_file(self):
+        file_field_name = 'file'
+        if self.prefix:
+            file_field_name = '%s-%s' % (self.prefix, file_field_name)
+        return self.files.get(file_field_name)
+
     def save(self, commit=True):
         description = self.cleaned_data.get('description')
         link = self.cleaned_data.get('link')
         if not self.instance:
-            file = self.files.get('%s-file' % self.prefix)
+            file = self._get_file()
             return self.parent.attachments.add(filename=file.name, content_type=file.content_type, file=file.file,
                                                description=description, link=link)
 
