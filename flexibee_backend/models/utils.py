@@ -1,8 +1,8 @@
 from django.db import models
 from django.utils.functional import SimpleLazyObject
+from django.core.exceptions import ObjectDoesNotExist
 
 from flexibee_backend.db.utils import get_db_name, set_db_name
-from django.core.exceptions import ObjectDoesNotExist
 
 
 def get_model_by_db_table(db_table):

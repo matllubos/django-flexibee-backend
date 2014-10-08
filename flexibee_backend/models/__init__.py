@@ -2,7 +2,6 @@ import decimal
 
 from .fields import *
 
-from django.db import models
 from django.template.defaultfilters import slugify
 from django.utils.translation import ugettext_lazy as _
 from django.db.models.base import ModelBase
@@ -29,6 +28,7 @@ class FlexibeeItem(object):
 
     def __init__(self, instance, connector, data=None, **kwargs):
         self.instance = instance
+        self._foreign_key_setter('instance', instance)
         self.connector = connector
         if data is not None:
             self.stored = True
@@ -36,6 +36,21 @@ class FlexibeeItem(object):
 
         for key, value in kwargs.items():
             setattr(self, key, value)
+
+    def _foreign_key_setter(self, field_name, rel_obj_or_class=None, rel_pk=None):
+        if rel_obj_or_class and isinstance(rel_obj_or_class, models.Model):
+            rel_obj = rel_obj_or_class
+            rel_pk = rel_obj_or_class.pk
+            model = rel_obj_or_class.__class__
+        elif rel_obj_or_class and rel_pk and issubclass(rel_obj_or_class, models.Model):
+            rel_obj = lazy_obj_loader(rel_obj_or_class, {'pk':rel_pk}, self.instance.flexibee_company.flexibee_db_name)
+            model = rel_obj_or_class
+        else:
+            model = None
+            rel_obj = None
+        setattr(self, field_name, rel_obj)
+        setattr(self, '%s_id' % field_name, rel_pk)
+        setattr(self, '%s_model' % field_name, model)
 
     def _decode(self, data):
         """
@@ -195,28 +210,25 @@ class Relation(FlexibeeItem):
     def __init__(self, instance, connector, data=None, **kwargs):
         super(Relation, self).__init__(instance, connector, data, **kwargs)
         if self.instance._meta.db_table in ['pokladni-pohyb', 'banka']:
-            self.payment = self.instance
+            self._foreign_key_setter('payment', instance)
         elif self.instance._meta.db_table in ['faktura-vydana', 'faktura-prijata']:
-            self.invoice = self.instance
+            self._foreign_key_setter('invoice', instance)
 
-    def _get_related_db_table(self, data, field_name):
-        return data['%s@ref' % field_name].split('/')[-2]
+    def _get_related_db_table(self, data, data_field_name):
+        return data['%s@ref' % data_field_name].split('/')[-2]
 
-    def _get_related_pk(self, data, field_name):
-        return data['%s@ref' % field_name].split('/')[-1][:-5]
+    def _get_related_pk(self, data, data_field_name):
+        return data['%s@ref' % data_field_name].split('/')[-1][:-5]
 
-    def _get_related_obj(self, data, field_name):
-        related_model = get_model_by_db_table(self._get_related_db_table(data, field_name))
-        if related_model is None:
-            return None
-        return lazy_obj_loader(related_model, {'pk': self._get_related_pk(data, field_name)},
-                               self.instance.flexibee_company.flexibee_db_name)
+    def _set_related_obj(self, data, data_field_name, field_name):
+        related_model = get_model_by_db_table(self._get_related_db_table(data, data_field_name))
+        return self._foreign_key_setter(field_name, related_model, self._get_related_pk(data, data_field_name))
 
     def _decode(self, data):
         if self.instance._meta.db_table in ['pokladni-pohyb', 'banka']:
-            self.invoice = self._get_related_obj(data, 'a')
+            self._set_related_obj(data, 'a', 'invoice')
         elif self.instance._meta.db_table in ['faktura-vydana', 'faktura-prijata']:
-            self.payment = self._get_related_obj(data, 'b')
+            self._set_related_obj(data, 'b', 'payment')
         self.type = data['typVazbyK']
         self.pk = data['id']
         self.sum = decimal.Decimal(data['castka'])
