@@ -54,6 +54,7 @@ class FlexibeeAttachmentForm(FlexibeeItemForm):
 
     def save(self, commit=True):
         description = self.cleaned_data.get('description')
+        print description
         link = self.cleaned_data.get('link')
         if not self.instance:
             file = self._get_file()
@@ -63,6 +64,7 @@ class FlexibeeAttachmentForm(FlexibeeItemForm):
         self.instance.link = link
         self.instance.description = description
 
+        print 'save'
         if commit:
             self.instance.save()
         return self.instance

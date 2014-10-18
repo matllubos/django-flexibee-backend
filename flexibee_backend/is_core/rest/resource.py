@@ -1,136 +1,126 @@
-from piston.resource import BaseResource, DefaultRestModelResource
-
-from .serializer import *
-from flexibee_backend.models import Attachment
-from is_core.rest.resource import RestResource
 from django.core.exceptions import ObjectDoesNotExist
-from piston.exception import DataInvalidException, ResourceNotFoundException, \
-    RestException, NotAllowedException, ConflictException
-from piston.response import RestErrorResponse, RestErrorsResponse
-from piston.utils import rc
+from django.http.response import Http404
 
+from piston.resource import BaseObjectResource
+
+from is_core.rest.resource import RestResource
+
+from flexibee_backend.models import Attachment, FlexibeeItem
 from flexibee_backend.is_core.forms import FlexibeeAttachmentForm
 from flexibee_backend.models import Relation
+from is_core.site import get_model_core
 
 
-class FlexibeeItemResource(DefaultRestModelResource, RestResource):
+# TODO: permissions, save, delete, update
+class FlexibeeItemResource(RestResource, BaseObjectResource):
     field_name = None
     form_class = None
-    allowed_methods = ('GET', 'POST', 'PUT', 'DELETE')
+    register = True
 
-    def get_parent_obj(self):
-        qs = self.get_parent_queryset()
-        print self.request.kwargs.get('parent_pk')
-        return qs.get(pk=self.request.kwargs.get('parent_pk'))
+    def _get_parent_obj(self):
+        qs = self._get_parent_queryset()
+        return qs.get(pk=self.kwargs.get('parent_pk'))
 
-    def get_parent_queryset(self):
-        print self.core
-        return self.core.get_queryset(self.request)
+    def _get_parent_queryset(self):
+        print self.kwargs
+        return self.core.get_queryset(self.request, self.request.kwargs.get('parent_group'))
 
-    def get_queryset(self):
-        return getattr(self.get_parent_obj(), self.field_name)
+    def _get_queryset(self, parent_obj=None):
+        parent_obj = parent_obj or self._get_parent_obj()
 
-    def get_form(self, request, inst=None, data=None, files=None, initial={}):
-        # When is send PUT (resource instance exists), it is possible send only changed values.
-        exclude = []
+        return getattr(parent_obj, self.field_name)
 
-        kwargs = {}
-        if inst:
-            kwargs['instance'] = inst
-        if data:
-            kwargs['data'] = data
-            kwargs['files'] = files
+    def _get_obj_or_none(self, pk=None, parent_obj=None):
+        pk = pk or self.kwargs.get(self.pk_name)
+        if not pk:
+            return None
 
-        form = self.form_class(initial=initial, **kwargs)
-        form.parent = self.get_parent_obj()
-        return form
-
-    def read(self, request, *args, **kwargs):
-        if 'pk' in self.request.kwargs:
-            try:
-                return self.get_queryset().get(self.request.kwargs.get('pk'))
-            except ObjectDoesNotExist:
-                return rc.NOT_FOUND
-        return self.get_queryset().all()
-
-    def exists(self, pk):
         try:
-            self.get_queryset().get(pk)
+            return self._get_queryset(parent_obj).get(pk)
+        except ObjectDoesNotExist:
+            return None
+
+    def _get_obj_or_404(self, pk=None, parent_obj=None):
+        obj = self._get_obj_or_none(pk, parent_obj)
+        if not obj:
+            raise Http404
+        return obj
+
+    def _exists_obj(self, **kwargs):
+        try:
+            self._get_queryset().get(kwargs.get('pk'))
             return True
-        except self.model.DoesNotExist:
+        except ObjectDoesNotExist:
             return False
 
-    def update(self, request, pk=None, **kwargs):
-        data = self._prepare_data(request)
-        data['pk'] = pk
-        try:
-            return self._create_or_update(request, data)
-        except DataInvalidException as ex:
-            return RestErrorsResponse(ex.errors)
-        except ResourceNotFoundException:
-            return rc.NOT_FOUND
-        except RestException as ex:
-            return RestErrorResponse(ex.message)
+    def _is_single_obj_request(self, result):
+        return isinstance(result, FlexibeeItem)
 
-    def create(self, request, pk=None, **kwargs):
-        data = self._prepare_data(request)
-        try:
-            inst = self._create_or_update(request, data)
-        except DataInvalidException as ex:
-            return RestErrorsResponse(ex.errors)
-        except ResourceNotFoundException:
-            # It cannot happend
-            return rc.NOT_FOUND
-        except RestException as ex:
-            return RestErrorResponse(ex.message)
-        return inst
+    def _get_form(self, fields=None, inst=None, data=None, files=None, initial={}):
+        # When is send PUT (resource instance exists), it is possible send only changed values.
+        form = super(FlexibeeItemResource, self)._get_form(fields, inst, data, files, initial)
+        form.parent = data.get('_parent') or self._get_parent_obj()
+        return form
 
-    def _prepare_data(self, request):
-        data = self.flatten_dict(request.data)
-        return data
-
-    def _get_instance(self, request, data):
+    def _get_instance(self, data):
         # If data contains id this method is update otherwise create
         inst = None
-        if 'pk' in data.keys():
-            inst = self.get_queryset().get(pk=data.get('pk'))
+
+        pk = data.get(self.pk_field_name)
+        if pk:
+            inst = self._get_queryset(parent_obj=data.get('_parent')).get(pk)
         return inst
 
-    def _create_or_update(self, request, data, via=None):
+    def _pre_save_obj(self, obj, form, change):
+        self.core.pre_save_model(self.request, obj, form, change)
+
+    def _save_obj(self, obj, form, change):
+        self.core.save_model(self.request, obj, form, change)
+
+    def _post_save_obj(self, obj, form, change):
+        self.core.post_save_model(self.request, obj, form, change)
+
+    def _pre_delete_obj(self, obj):
+        self.core.pre_delete_model(self.request, obj)
+
+    def _delete_obj(self, obj):
+        self.core.delete_model(self.request, obj)
+
+    def _post_delete_obj(self, obj):
+        self.core.post_delete_model(self.request, obj)
+
+    def _delete(self, pk, via=None, parent_obj=None):
         via = via or []
+        obj = self._get_obj_or_404(pk, parent_obj)
+        self._check_delete_permission(obj, via)
+        self._pre_delete_obj(obj)
+        self._delete_obj(obj)
+        self._post_delete_obj(obj)
 
-        inst = self._get_instance(request, data)
-
-        if inst and not self.has_update_permission(request, inst, via):
-            return inst
-        elif not inst and not self.has_create_permission(request, via=via):
-            raise NotAllowedException
-        form_fields = self.get_form(request, inst=inst).fields
-
-        # preprocesor = FileDataPreprocessor(request, self.model, form_fields, inst, via)
-        # data, files = preprocesor.process_data(request.data, request.FILES)
-
-        files = request.FILES
-        form = self.get_form(request, inst=inst, data=data, files=files)
-        errors = form.is_invalid()
-        if errors:
-            raise DataInvalidException(errors)
-
-        inst = form.save(commit=False)
-        inst.save()
-        return inst
-
-    def delete(self, request, *args, **kwargs):
-        raise NotImplementedError
+    def _rest_links(self, obj):
+        rest_links = {}
+        kwargs = {'parent_group': get_model_core(obj.instance).menu_group, 'parent_pk': obj.instance.pk}
+        print kwargs
+        for pattern in self.core.resource_patterns.values():
+            if pattern.send_in_rest:
+                url = pattern.get_url_string(self.request, obj=obj, kwargs=kwargs)
+                if url:
+                    allowed_methods = pattern.get_allowed_methods(self.request, obj)
+                    if allowed_methods:
+                        rest_links[pattern.name] = {
+                            'url': url,
+                            'methods': [method.upper() for method in allowed_methods]
+                        }
+        return rest_links
 
 
 class AttachmentItemResource(FlexibeeItemResource):
     field_name = 'attachments'
 
     form_class = FlexibeeAttachmentForm
-    fields = ('id', '_obj_name', 'filename', 'content_type', 'description', 'link')
-    default_obj_fields = ('id', '_obj_name', 'filename', 'content_type', 'description', 'link')
-    default_list_fields = ('id', '_obj_name', 'filename', 'content_type', 'description', 'link')
+    fields = ('id', '_obj_name', 'filename', 'content_type', 'description', 'link', '_rest_links')
+    default_detailed_fields = ('id', '_obj_name', 'filename', 'content_type', 'description', 'link', '_rest_links')
+    default_general_fields = ('id', '_obj_name', 'filename', 'content_type', 'description', 'link', '_rest_links')
 
     model = Attachment
 
@@ -139,18 +129,8 @@ class RelationItemResource(FlexibeeItemResource):
     field_name = 'relations'
 
     form_class = FlexibeeAttachmentForm
-    fields = ('id', '_obj_name', 'invoice', 'payment', 'remain', 'sum', 'currency_sum')
-    default_obj_fields = ('id', '_obj_name', 'payment', 'remain', 'sum', 'currency_sum')
-    default_list_fields = ('id', '_obj_name', 'payment', 'remain', 'sum', 'currency_sum')
-
-    def get_default_obj_fields(self, request, obj):
-        return self.default_obj_fields
-
-    def get_default_list_fields(self, request):
-        return self.default_list_fields
-
-    def get_guest_fields(self, request):
-        return self.guest_fields
+    fields = ('id', '_obj_name', 'invoice', 'payment', 'remain', 'sum', 'currency_sum', '_rest_links')
+    default_detailed_fields = ('id', '_obj_name', 'payment', 'remain', 'sum', 'currency_sum', '_rest_links')
+    default_general_fields = ('id', '_obj_name', 'payment', 'remain', 'sum', 'currency_sum', '_rest_links')
 
     model = Relation
-

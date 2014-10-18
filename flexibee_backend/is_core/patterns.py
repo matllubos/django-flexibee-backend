@@ -1,13 +1,9 @@
 from django.core.urlresolvers import reverse
 
 from is_core.patterns import RestPattern, UIPattern
-from django.utils.datastructures import SortedDict
-from is_core.utils import get_new_class_name
 
 
 class FlexibeePattern(object):
-
-    send_in_rest = False
 
     def get_kwargs(self, request):
         kwargs = {}
@@ -16,7 +12,7 @@ class FlexibeePattern(object):
         return kwargs
 
     def get_url_string(self, request, obj=None, kwargs=None):
-        kwargs = kwargs or {}
+        kwargs = (kwargs or {}).copy()
         kwargs.update(self.get_kwargs(request))
         if obj:
             kwargs.update(self._get_try_kwarg(obj))
@@ -33,4 +29,3 @@ class FlexibeeUIPattern(FlexibeePattern, UIPattern):
 
 class AttachmentsFlexibeeUIPattern(FlexibeeUIPattern):
     send_in_rest = False
-

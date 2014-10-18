@@ -4,6 +4,7 @@ from django.db.transaction import get_connection
 from django.core.urlresolvers import reverse
 from django.shortcuts import get_object_or_404
 from django.db.utils import DatabaseError
+from django.http.response import Http404
 
 from is_core.main import UIRestModelISCore, RestModelISCore
 from is_core.generic_views.inlines.inline_form_views import TabularInlineFormView
@@ -14,6 +15,7 @@ from is_core.generic_views.form_views import AddModelFormView, EditModelFormView
 from is_core.generic_views.exceptions import SaveObjectException
 from is_core.actions import WebAction
 from is_core.utils import get_new_class_name
+from is_core.rest.factory import modelrest_factory
 
 from flexibee_backend.is_core.patterns import (FlexibeeRestPattern, FlexibeeUIPattern, FlexibeePattern,
                                                AttachmentsFlexibeeUIPattern)
@@ -22,7 +24,9 @@ from flexibee_backend.db.backends.rest.exceptions import FlexibeeDatabaseExcepti
 from flexibee_backend.is_core.views import AttachmentFileView
 from flexibee_backend.is_core.rest.resource import AttachmentItemResource, RelationItemResource
 from flexibee_backend.models import Attachment
-from django.http.response import Http404
+
+from rest.serializer import *
+from rest.data_processor import *
 
 
 class FlexibeeIsCore(UIRestModelISCore):
@@ -84,11 +88,11 @@ class ItemIsCore(RestModelISCore):
     def get_company(self, request):
         return get_object_or_404(self.get_companies(request), pk=request.kwargs.get('company_pk'))
 
-    def get_queryset(self, request):
+    def get_queryset(self, request, parent_group):
         from is_core.site import get_core
         # TODO This is not very secure
 
-        parent_core = get_core(request.kwargs['parent_group'])
+        parent_core = get_core(parent_group)
         if not parent_core:
             raise Http404
 
@@ -100,13 +104,8 @@ class ItemIsCore(RestModelISCore):
             '/'.join(self.get_menu_groups())
         )
 
-    def rest_resource_patterns(self):
-        resource_kwargs = {
-            'site_name': self.site_name, 'menu_group': self.menu_group, 'core': self, 'register': True
-        }
-        return DoubleRestPattern(
-            'api', self.rest_resource_pattern_class, self.rest_resource_class, self, r'^/$', resource_kwargs
-        ).patterns
+    def get_resource_patterns(self):
+        return DoubleRestPattern(self.rest_resource_class, self.rest_resource_pattern_class, self).patterns
 
 
 class AttachmentsIsCore(ItemIsCore):
