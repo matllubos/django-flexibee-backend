@@ -36,7 +36,6 @@ class ReverseMultipleDataPreprocessor(MultipleDataProcessorMixin, ResourceProces
         resource = self._get_resource(model)
         if resource:
             try:
-                print obj_data
                 resource._delete(self._flat_object_to_pk(resource.pk_field_name, obj_data), self.via,
                                  parent_obj=self.inst)
             except (DataInvalidException, RestException) as ex:

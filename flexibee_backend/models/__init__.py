@@ -105,7 +105,6 @@ class FlexibeeItem(object):
         try:
             update_via = self._update_via()
             self.pk = self.connector.write(update_via._meta.db_table, update_via.pk, self._encode())
-            print self.pk
         except FlexibeeDatabaseException as ex:
             raise ValidationError(ex.errors)
 

@@ -22,7 +22,6 @@ class FlexibeeItemResource(RestResource, BaseObjectResource):
         return qs.get(pk=self.kwargs.get('parent_pk'))
 
     def _get_parent_queryset(self):
-        print self.kwargs
         return self.core.get_queryset(self.request, self.request.kwargs.get('parent_group'))
 
     def _get_queryset(self, parent_obj=None):
@@ -100,7 +99,6 @@ class FlexibeeItemResource(RestResource, BaseObjectResource):
     def _rest_links(self, obj):
         rest_links = {}
         kwargs = {'parent_group': get_model_core(obj.instance).menu_group, 'parent_pk': obj.instance.pk}
-        print kwargs
         for pattern in self.core.resource_patterns.values():
             if pattern.send_in_rest:
                 url = pattern.get_url_string(self.request, obj=obj, kwargs=kwargs)

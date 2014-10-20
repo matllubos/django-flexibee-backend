@@ -1,7 +1,7 @@
 from django import forms
 from django.utils.translation import ugettext_lazy as _
 
-from is_core.forms import RestFormMixin
+from piston.forms import RestFormMixin
 
 from flexibee_backend.is_core.forms.widgets import AttachmentWidget, EmptyWidget
 
@@ -54,7 +54,6 @@ class FlexibeeAttachmentForm(FlexibeeItemForm):
 
     def save(self, commit=True):
         description = self.cleaned_data.get('description')
-        print description
         link = self.cleaned_data.get('link')
         if not self.instance:
             file = self._get_file()
@@ -64,7 +63,6 @@ class FlexibeeAttachmentForm(FlexibeeItemForm):
         self.instance.link = link
         self.instance.description = description
 
-        print 'save'
         if commit:
             self.instance.save()
         return self.instance

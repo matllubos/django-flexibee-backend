@@ -224,7 +224,6 @@ class AttachmentConnector(BaseConnector):
                           'query_string': 'detail=custom:id,contentType,nazSoub,contentType,poznam,link',
                           'extra': extra, 'type': 'json'}
         r = requests.get(url, auth=(self.username, self.password))
-        print r.json()
         return r.json().get('winstrom').get('priloha')
 
     def _get_last_pk(self, table_name, parent_id):
@@ -252,11 +251,9 @@ class AttachmentConnector(BaseConnector):
             url = 'https://%(hostname)s/c/%(db_name)s/%(table_name)s/%(parent_id)s/prilohy/%(pk)s.json'
             url = url % {'hostname': self.hostname, 'db_name': self.db_name,
                          'table_name': table_name, 'parent_id': parent_id, 'pk': pk}
-            print data
             data = {'winstrom': {'priloha': data}}
             headers = {'Accept': 'application/json'}
             r = requests.put(url, data=self._serialize(data), headers=headers, auth=(self.username, self.password))
-            print r.json()
         if r.status_code not in [200, 201]:
             self.logger.warning('Response %s, content: %s' % (r.status_code, force_text(r.text)))
             raise FlexibeeDatabaseException('Rest PUT method error', r, url)
