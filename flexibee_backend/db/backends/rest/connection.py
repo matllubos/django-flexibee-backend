@@ -6,11 +6,12 @@ import decimal
 from django.db.utils import DatabaseError
 from django.utils.encoding import force_text
 from django.utils.datastructures import SortedDict
-from django.utils.http import urlquote
+from django.utils.http import urlquote, urlunquote
 
 from flexibee_backend.db.backends.rest.exceptions import FlexibeeDatabaseException, \
     ChangesNotActivatedFlexibeeDatabaseException
 from flexibee_backend.db.backends.rest.filters import ElementaryFilter
+from django.contrib.admin.util import unquote
 
 
 
@@ -67,9 +68,12 @@ class ModelConnector(BaseConnector):
         result['id'] = obj_id
         return result
 
+    def _construct_filter(self, filters):
+        return ' and '.join(['(%s)' % force_text(filter) for filter in filters])
+
     def _get_extra_filter(self, filters):
         extra = ''
-        filter_string = ' and '.join(['(%s)' % force_text(filter) for filter in filters])
+        filter_string = self._construct_filter(filters)
         if filter_string:
             extra = '/(%s)' % urlquote(filter_string, safe='')
         return extra
@@ -172,25 +176,31 @@ class ModelConnector(BaseConnector):
             self.logger.warning('Response %s, content: %s' % (r.status_code, force_text(r.text)))
             raise FlexibeeDatabaseException('Rest PUT method error', r, url)
 
-    def delete(self, table_name, data):
+    def delete(self, table_name, filters):
         self._check_settings(table_name)
 
-        for data_obj in data:
+        filters = list(filters)
+        url = self.URL % {
+            'hostname': self.hostname, 'db_name': self.db_name,
+            'table_name': table_name, 'query_string': '',
+            'extra': '', 'type': 'json'
+        }
+        data = {
+            'winstrom': {
+                table_name: {
+                    '@action': 'delete',
+                    '@filter': self._construct_filter(filters),
+                }
+            }
+        }
+        headers = {'Accept': 'application/json'}
 
-            url = self.URL % {'hostname': self.hostname, 'db_name': self.db_name,
-                              'table_name': table_name, 'query_string': '',
-                              'extra': '/%s' % data_obj.get('id'), 'type': 'json'}
-            data = {'winstrom': {table_name: data_obj}}
-            headers = {'Accept': 'application/json'}
-
-            self.logger.info('Send DELETE to %s' % url)
-            r = requests.delete(url, data=self._serialize(data), headers=headers, auth=(self.username, self.password))
-            self._clear_table_cache(table_name)
-            if r.status_code not in [200, 404]:
-                self.logger.info('Response %s, content: %s' % (r.status_code, force_text(r.text)))
-                raise FlexibeeDatabaseException('Rest DELETE method error', r, url)
-            else:
-                self.logger.info('Response %s, content: %s' % (r.status_code, force_text(r.text)))
+        r = requests.put(url, data=self._serialize(data), headers=headers, auth=(self.username, self.password))
+        if r.status_code not in [201]:
+            self.logger.info('Response %s, content: %s' % (r.status_code, force_text(r.text)))
+            raise FlexibeeDatabaseException('Rest DELETE method error', r, url)
+        else:
+            self.logger.info('Response %s, content: %s' % (r.status_code, force_text(r.text)))
 
     def get_response(self, table_name, id, type):
         self._check_settings(table_name)
@@ -424,22 +434,30 @@ class RestQuery(object):
                                                   '\'%s\'' % obj_data.get('external-ids'), False))
                 return query.fetch(0, 1)[0].get('id')
 
-    def _delete_via(self, data):
-        for obj_data in data:
-            store_view_db_query = RestQuery(self.connector, self.via_table_name, ['id'],
-                                            [self.via_relation_name])
-            store_view_db_query.add_filter(ElementaryFilter('id', '=',
-                                                            obj_data.get(self.via_fk_name), False))
-            via_data = store_view_db_query.fetch(0, 0, extra_fields=['%s(id)' % self.via_relation_name])[0]
-            db_related_objs = via_data.get(self.via_relation_name, [])
+    def _get_deleted_objects_via_obj(self):
+        result = {}
+        for entity in self.get(extra_fields=['id', self.via_fk_name]).get(self.table_name):
+            parent_id = entity['%s@ref' % self.via_fk_name].split('/')[-1][:-5]
+            deleted_pks = result.get(parent_id, [])
+            deleted_pks.append(entity.get('id'))
+            result[parent_id] = deleted_pks
+        return result
 
-            via_data[self.via_relation_name] = []
+    def _delete_via(self):
+        for parent_pk, deleted_pks in self._get_deleted_objects_via_obj().items():
+            store_view_db_query = RestQuery(
+                self.connector, self.via_table_name, ['id'], [self.via_relation_name]
+            )
+            store_view_db_query.add_filter(ElementaryFilter('id', '=', parent_pk, False))
+            parent_data = store_view_db_query.fetch(0, 0, extra_fields=['%s(id)' % self.via_relation_name])[0]
+            child_data = parent_data.get(self.via_relation_name, [])
+            parent_data[self.via_relation_name] = filtered_child_data = []
 
-            for relation_obj in db_related_objs:
-                if relation_obj.get('id') != str(obj_data.get('id')):
-                    via_data[self.via_relation_name].append({'id': relation_obj.get('id')})
-            via_data['%s@removeAll' % self.via_relation_name] = 'true'
-            store_view_db_query.update(via_data)
+            for relation_obj in child_data:
+                if relation_obj.get('id') not in deleted_pks:
+                    filtered_child_data.append({'id': relation_obj.get('id')})
+            parent_data['%s@removeAll' % self.via_relation_name] = 'true'
+            store_view_db_query.update(parent_data)
             store_view_db_query.connector._clear_table_cache(self.table_name)
 
     def update(self, data):
@@ -462,23 +480,7 @@ class RestQuery(object):
             return len(data)
 
     def delete(self):
-        data = []
-        if not self.connector._is_request_for_one_object(self.filters) or self._is_via():
-
-            extra_fields = ['id']
-            if self._is_via():
-                extra_fields.append(self.via_fk_name)
-
-            for entity in self.get(extra_fields=extra_fields).get(self.table_name):
-                entity_obj = {'id': entity.get('id')}
-                if self._is_via():
-                    entity_obj[self.via_fk_name] = entity['%s@ref' % self.via_fk_name].split('/')[-1][:-5]
-                data.append(entity_obj)
-
-        else:
-            data.append({'id': self.filters[0].value})
-
         if self._is_via():
-            self._delete_via(data)
+            self._delete_via()
         else:
-            self.connector.delete(self.table_name, data)
+            self.connector.delete(self.table_name, self.filters)
