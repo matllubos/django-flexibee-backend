@@ -200,6 +200,7 @@ class ModelConnector(BaseConnector):
             self.logger.info('Response %s, content: %s' % (r.status_code, force_text(r.text)))
             raise FlexibeeDatabaseException('Rest DELETE method error', r, url)
         else:
+            self._clear_table_cache(table_name)
             self.logger.info('Response %s, content: %s' % (r.status_code, force_text(r.text)))
 
     def get_response(self, table_name, id, type):
