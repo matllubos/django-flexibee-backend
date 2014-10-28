@@ -15,6 +15,8 @@ from flexibee_backend.db.backends.rest.exceptions import SyncException
 from flexibee_backend.db.backends.rest.connection import AttachmentConnector, RelationConnector
 from flexibee_backend import config
 from flexibee_backend.models.utils import get_model_by_db_table, lazy_obj_loader
+from django.db.models.fields import CharField
+from flexibee_backend.models.fields import FlexibeeExtKey
 
 
 class FlexibeeItem(object):
@@ -331,6 +333,7 @@ class FlexibeeModel(models.Model):
 
     flexibee_company = CompanyForeignKey(config.FLEXIBEE_COMPANY_MODEL, null=True, blank=True, editable=False,
                                          on_delete=models.DO_NOTHING)
+    flexibee_ext_id = FlexibeeExtKey(null=False, blank=False, editable=False, db_column='external-ids')
     _flexibee_meta = OptionsLazy('_flexibee_meta', FlexibeeOptions)
 
     class Meta:

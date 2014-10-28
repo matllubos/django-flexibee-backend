@@ -100,7 +100,7 @@ class BackendQuery(NonrelQuery):
                     pass
                 else:
                     output[db_field_name] = self.compiler.convert_value_from_db(field.get_internal_type(),
-                                                                                entity[db_field_name], db_field_name,
+                                                                                entity.get(db_field_name), db_field_name,
                                                                                 entity)
             yield output
 
@@ -199,6 +199,8 @@ class SQLDataCompiler(object):
             else:
                 return None
 
+        if db_type == 'FlexibeeExtKey':
+            return value
         if (value == '' or value is None) and db_type in ['DecimalField', 'FloatField', 'IntegerField',
                                                           'DateField', 'BooleanField']:
             return None
@@ -371,7 +373,6 @@ class SQLUpdateCompiler(NonrelUpdateCompiler, SQLCompiler):
 
                 if db_value is not None:
                     db_values[db_field] = db_value
-
         return query.update(db_values)
 
 

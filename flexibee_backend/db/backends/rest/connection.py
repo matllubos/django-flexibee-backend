@@ -6,12 +6,12 @@ import decimal
 from django.db.utils import DatabaseError
 from django.utils.encoding import force_text
 from django.utils.datastructures import SortedDict
-from django.template.defaultfilters import urlencode
 from django.utils.http import urlquote
 
 from flexibee_backend.db.backends.rest.exceptions import FlexibeeDatabaseException, \
     ChangesNotActivatedFlexibeeDatabaseException
 from flexibee_backend.db.backends.rest.filters import ElementaryFilter
+
 
 
 def decimal_default(obj):
@@ -53,14 +53,25 @@ class ModelConnector(BaseConnector):
         return (len(filters) == 1 and isinstance(filters[0], ElementaryFilter) and
                 filters[0].field == 'id' and filters[0].op == '=' and not filters[0].negated)
 
+    def _prepare_obj_data(self, obj_data):
+        result = obj_data.copy()
+        obj_id = []
+        pk = obj_data.get('id')
+        if pk:
+            obj_id.append(pk)
+
+        ext_pk = result.pop('external-ids', None)
+        if ext_pk:
+            obj_id.append(ext_pk)
+
+        result['id'] = obj_id
+        return result
+
     def _get_extra_filter(self, filters):
         extra = ''
-        if self._is_request_for_one_object(filters):
-            extra = '/%s' % filters[0].value
-        else:
-            filter_string = ' and '.join(['(%s)' % force_text(filter) for filter in filters])
-            if filter_string:
-                extra = '/(%s)' % urlquote(filter_string, safe='')
+        filter_string = ' and '.join(['(%s)' % force_text(filter) for filter in filters])
+        if filter_string:
+            extra = '/(%s)' % urlquote(filter_string, safe='')
         return extra
 
     def _get_query_string(self, fields, relations, ordering, offset, base):
@@ -146,10 +157,11 @@ class ModelConnector(BaseConnector):
         url = self.URL % {'hostname': self.hostname, 'db_name': self.db_name,
                           'table_name': table_name, 'query_string': '', 'extra': '', 'type': 'json'}
 
-        data = {'winstrom': {table_name: data}}
+        data = {'winstrom': {table_name: [self._prepare_obj_data(obj_data) for obj_data in data]}}
         headers = {'Accept': 'application/json'}
 
         self.logger.info('Send PUT to %s' % url)
+
         r = requests.put(url, data=self._serialize(data), headers=headers, auth=(self.username, self.password))
 
         if r.status_code in [200, 201]:
@@ -351,16 +363,6 @@ class RestQuery(object):
         self.via_relation_name = via_relation_name
         self.via_fk_name = via_fk_name
 
-    def _extra_filter(self):
-        extra = ''
-        if self._is_request_for_one_object():
-            extra = '/%s' % self.filters[0].value
-        else:
-            filter_string = ' and '.join(['(%s)' % force_text(filter) for filter in self.filters])
-            if filter_string:
-                extra = '/(%s)' % urlencode(filter_string)
-        return extra
-
     def get(self, offset=0, base=0, extra_fields=[]):
         fields = list(self.fields)
         fields += extra_fields
@@ -406,17 +408,20 @@ class RestQuery(object):
             store_view_db_query.add_filter(ElementaryFilter('id', '=',
                                                             obj_data.get(self.via_fk_name), False))
             via_data = {'id': str(obj_data.get(self.via_fk_name))}
-            via_data[self.via_relation_name] = [obj_data]
+            via_data[self.via_relation_name] = [self.connector._prepare_obj_data(obj_data)]
+
             store_view_db_query.update(via_data)
             store_view_db_query.connector._clear_table_cache(self.table_name)
+
             if 'id' in obj_data:
                 return obj_data['id']
             else:
                 query = RestQuery(self.connector, self.table_name, ['id'])
                 query.add_filter(ElementaryFilter(self.via_fk_name, '=',
                                                   obj_data.get(self.via_fk_name), False))
-                # http://www.flexibee.eu/api/doc/ref/identifiers
-                query.add_ordering('id', False)
+
+                query.add_filter(ElementaryFilter('id', '=',
+                                                  '\'%s\'' % obj_data.get('external-ids'), False))
                 return query.fetch(0, 1)[0].get('id')
 
     def _delete_via(self, data):
