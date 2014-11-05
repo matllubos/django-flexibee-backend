@@ -18,13 +18,16 @@ class FlexibeeItemsManagerSerializer(Serializer):
 @register
 class ItemSerializer(ModelSerializer):
 
-    def _fields_to_python(self, request, obj, serialization_format, fields, **kwargs):
-        resource_method_fields = self._get_resource_method_fields(self._get_model_resource(request, obj), fields)
+    def _fields_to_python(self, request, obj, serialization_format, fieldset, requested_fieldset, **kwargs):
+        resource_method_fields = self._get_resource_method_fields(self._get_model_resource(request, obj), fieldset)
         out = dict()
-        for field in fields:
+        for field in fieldset.fields:
             subkwargs = self._copy_kwargs(self._get_model_resource(request, obj), kwargs)
-            field_name = self._get_field_name(field, subkwargs)
-            if field in resource_method_fields:
+            requested_field = None
+            if requested_fieldset:
+                requested_field = requested_fieldset.get(field.name)
+            field_name = self._get_field_name(field, requested_field, subkwargs)
+            if field_name in resource_method_fields:
                 out[field_name] = self._method_to_python(resource_method_fields[field_name], request, obj,
                                                          serialization_format, **subkwargs)
             else:

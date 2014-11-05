@@ -116,7 +116,6 @@ class AttachmentItemResource(FlexibeeItemResource):
     field_name = 'attachments'
 
     form_class = FlexibeeAttachmentForm
-    fields = ('id', '_obj_name', 'filename', 'content_type', 'description', 'link', '_rest_links')
     default_detailed_fields = ('id', '_obj_name', 'filename', 'content_type', 'description', 'link', '_rest_links')
     default_general_fields = ('id', '_obj_name', 'filename', 'content_type', 'description', 'link', '_rest_links')
 
@@ -127,8 +126,7 @@ class RelationItemResource(FlexibeeItemResource):
     field_name = 'relations'
 
     form_class = FlexibeeAttachmentForm
-    fields = ('id', '_obj_name', 'invoice', 'payment', 'remain', 'sum', 'currency_sum', '_rest_links')
-    default_detailed_fields = ('id', '_obj_name', 'payment', 'remain', 'sum', 'currency_sum', '_rest_links')
+    default_detailed_fields = ('id', '_obj_name', 'payment', 'remain', 'sum', 'currency_sum', '_rest_links', 'invoice')
     default_general_fields = ('id', '_obj_name', 'payment', 'remain', 'sum', 'currency_sum', '_rest_links')
 
     model = Relation
