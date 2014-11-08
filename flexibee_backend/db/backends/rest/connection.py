@@ -6,13 +6,11 @@ import decimal
 from django.db.utils import DatabaseError
 from django.utils.encoding import force_text
 from django.utils.datastructures import SortedDict
-from django.utils.http import urlquote, urlunquote
+from django.utils.http import urlquote
 
-from flexibee_backend.db.backends.rest.exceptions import FlexibeeDatabaseException, \
-    ChangesNotActivatedFlexibeeDatabaseException
+from flexibee_backend.db.backends.rest.exceptions import (FlexibeeDatabaseException,
+                                                          ChangesNotActivatedFlexibeeDatabaseException)
 from flexibee_backend.db.backends.rest.filters import ElementaryFilter
-from django.contrib.admin.util import unquote
-
 
 
 def decimal_default(obj):

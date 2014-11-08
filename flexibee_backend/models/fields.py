@@ -1,3 +1,6 @@
+import string
+import random
+
 from django.db import models
 from django.db.models.fields.related import ForeignKey
 from django.db.models.fields import Field, CharField
@@ -8,6 +11,9 @@ from django.utils import timezone
 from flexibee_backend.db.utils import (get_connector, get_db_name)
 from flexibee_backend.db.backends.rest.connection import ModelConnector
 from flexibee_backend.db.backends.rest.exceptions import FlexibeeDatabaseException
+from flexibee_backend import config
+
+from calendar import timegm
 
 
 class CompanyForeignKey(ForeignKey):
@@ -34,7 +40,6 @@ class StoreViaForeignKey(ForeignKey):
 
 
 class FlexibeeExtKey(CharField):
-    prefix = 'SECTENO'
 
     def __init__(self, *args, **kwargs):
         kwargs['max_length'] = 255
@@ -42,9 +47,9 @@ class FlexibeeExtKey(CharField):
         super(FlexibeeExtKey, self).__init__(*args, **kwargs)
 
     def _generate_ext_id(self):
-        from calendar import timegm
-
-        return 'ext:%s:%s' % (self.prefix, timegm(timezone.now().timetuple()))
+        random_part = ''.join(random.choice(string.digits) for _ in range(10))
+        time_part = timegm(timezone.now().timetuple())
+        return 'ext:%s:%s%s' % (config.FLEXIBEE_EXTERNAL_KEY_PREFIX, time_part, random_part)
 
     def get_internal_type(self):
         return 'FlexibeeExtKey'

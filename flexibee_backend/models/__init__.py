@@ -15,8 +15,6 @@ from flexibee_backend.db.backends.rest.exceptions import SyncException
 from flexibee_backend.db.backends.rest.connection import AttachmentConnector, RelationConnector
 from flexibee_backend import config
 from flexibee_backend.models.utils import get_model_by_db_table, lazy_obj_loader
-from django.db.models.fields import CharField
-from flexibee_backend.models.fields import FlexibeeExtKey
 
 
 class FlexibeeItem(object):
