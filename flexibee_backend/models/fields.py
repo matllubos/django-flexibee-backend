@@ -64,7 +64,7 @@ class FlexibeeExtKey(CharField):
     def to_python(self, value):
         if value and isinstance(value, (list, tuple)):
             for val in value[::-1]:
-                if val.startswith('ext:%s' % self.prefix):
+                if val.startswith('ext:%s' % config.FLEXIBEE_EXTERNAL_KEY_PREFIX):
                     return val
         return value
 
