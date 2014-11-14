@@ -125,9 +125,9 @@ class FlexibeeAdminConnector(object):
 
         return file_handler.file_complete(size)
 
-    def restore_company(self, company, backup):
+    def restore_company(self, company, backup_file):
         url = self.RESTORE_URL % {'hostname': self.hostname, 'db_name': company.flexibee_db_name}
-        r = requests.put(url, data=backup, auth=(self.username, self.password))
+        r = requests.put(url, data=backup_file.read(), auth=(self.username, self.password))
         if r.status_code != 200:
             raise SyncException(r, url, msg='Failed Backup')
 
