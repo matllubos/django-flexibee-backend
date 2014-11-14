@@ -31,6 +31,7 @@ setup(
         'django>=1.6',
         'djangotoolbox>=1.6.2',
         'requests>=2.2.1',
+        'beautifulsoup4'
     ],
     zip_safe=False
 )
