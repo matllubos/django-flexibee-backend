@@ -116,7 +116,7 @@ class ItemsManager(object):
 
     def create(self, **kwargs):
         if not self.instance.pk:
-            raise FlexibeeDatabaseException('You cannot create item of not saved instance')
+            raise FlexibeeDatabaseException(msg='You cannot create item of not saved instance')
 
         item = self.add(**kwargs)
         item.save()
@@ -124,13 +124,13 @@ class ItemsManager(object):
 
     def delete(self):
         if not self.instance.pk:
-            raise FlexibeeDatabaseException('You cannot Delete items of not saved instance')
+            raise FlexibeeDatabaseException(msg='You cannot Delete items of not saved instance')
         for item in self.all():
             item.delete()
 
     def add(self, **kwargs):
         if not self.instance.pk:
-            raise FlexibeeDatabaseException('You cannot add item to not saved instance')
+            raise FlexibeeDatabaseException(msg='You cannot add item to not saved instance')
 
         return self.item_class(self.instance, self.connector, **kwargs)
 

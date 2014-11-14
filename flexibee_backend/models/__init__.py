@@ -170,7 +170,7 @@ class RelationManager(ItemsManager):
 
     def delete(self):
         if not self.instance.pk:
-            raise FlexibeeDatabaseException('You cannot Delete items of not saved instance')
+            raise FlexibeeDatabaseException(msg='You cannot Delete items of not saved instance')
 
         if self.instance._meta.db_table in ['pokladni-pohyb', 'banka']:
             self.connector.delete(self.instance._meta.db_table, self.instance.pk, [])
@@ -314,7 +314,6 @@ class Company(models.Model):
 
     flexibee_db_name = models.CharField(verbose_name=_('DB name'), null=False, blank=True, max_length=100,
                                         unique=True, validators=[db_name_validator])
-
     _flexibee_meta = OptionsLazy('_flexibee_meta', FlexibeeOptions)
 
     class Meta:

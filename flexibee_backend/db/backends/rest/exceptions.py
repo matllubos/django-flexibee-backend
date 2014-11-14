@@ -1,16 +1,32 @@
 from django.db.utils import DatabaseError
 
 
-class FlexibeeDatabaseException(DatabaseError):
+class FlexibeeResponseException(DatabaseError):
 
-    def __init__(self, msg, resp, url=None):
-        self.message = msg
+    def __init__(self, resp=None, url=None, msg=None):
         self.url = url
-        if url:
-            msg = '%s %s ' % (url, msg)
+        self.message = msg
         self.resp = resp
-        self.json_data = resp.json().get('winstrom')
-        super(FlexibeeDatabaseException, self).__init__('%s errors: %s' % (msg, self.errors))
+        super(FlexibeeResponseException, self).__init__(self.message)
+
+    def __str__(self):
+        print self.resp
+        if not self.resp:
+            print 'a'
+            return self.message
+        else:
+            print 'ted'
+            return 'url: %s\nmessage: %s\nresponse content: %s' % (self.url, self.message, self.resp.content)
+
+
+class FlexibeeDatabaseException(FlexibeeResponseException):
+
+    def __init__(self, resp=None, url=None, msg=None):
+        if resp:
+            self.json_data = resp.json().get('winstrom')
+        else:
+            self.json_data = {'message': msg}
+        super(FlexibeeDatabaseException, self).__init__(resp, url, msg)
 
     def stat(self):
         return self.json_data.get('stat')
@@ -33,12 +49,13 @@ class FlexibeeDatabaseException(DatabaseError):
 class ChangesNotActivatedFlexibeeDatabaseException(FlexibeeDatabaseException):
 
     def __init__(self, resp):
-        super(ChangesNotActivatedFlexibeeDatabaseException, self).__init__('Changes is not activated', resp)
+        super(ChangesNotActivatedFlexibeeDatabaseException, self).__init__(resp, msg='Changes is not activated')
 
 
-class SyncException(FlexibeeDatabaseException):
+class SyncException(FlexibeeResponseException):
 
-    def __init__(self, msg, resp, url=None):
+    def __init__(self, resp, url, msg=None):
         if not msg:
             msg = 'Company synchronization error'
-        super(SyncException, self).__init__(msg, resp, url)
+        super(SyncException, self).__init__(resp, url, msg)
+

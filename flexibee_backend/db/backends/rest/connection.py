@@ -151,7 +151,7 @@ class ModelConnector(BaseConnector):
             return {table_name:[]}
         else:
             self.logger.warning('Response %s, content: %s' % (r.status_code, force_text(r.text)))
-            raise FlexibeeDatabaseException('Rest GET method error', r, url)
+            raise FlexibeeDatabaseException(r, url, 'Rest GET method error')
 
     def write(self, table_name, data):
         self._check_settings(table_name)
@@ -172,7 +172,7 @@ class ModelConnector(BaseConnector):
             return r.json().get('winstrom')
         else:
             self.logger.warning('Response %s, content: %s' % (r.status_code, force_text(r.text)))
-            raise FlexibeeDatabaseException('Rest PUT method error', r, url)
+            raise FlexibeeDatabaseException(r, url, 'Rest PUT method error')
 
     def delete(self, table_name, filters):
         self._check_settings(table_name)
@@ -196,7 +196,7 @@ class ModelConnector(BaseConnector):
         r = requests.put(url, data=self._serialize(data), headers=headers, auth=(self.username, self.password))
         if r.status_code not in [201]:
             self.logger.info('Response %s, content: %s' % (r.status_code, force_text(r.text)))
-            raise FlexibeeDatabaseException('Rest DELETE method error', r, url)
+            raise FlexibeeDatabaseException(r, url, 'Rest DELETE method error')
         else:
             self._clear_table_cache(table_name)
             self.logger.info('Response %s, content: %s' % (r.status_code, force_text(r.text)))
@@ -255,7 +255,7 @@ class AttachmentConnector(BaseConnector):
         r = requests.get(url, auth=(self.username, self.password))
         if r.status_code != 200:
             self.logger.warning('Response %s, content: %s' % (r.status_code, force_text(r.text)))
-            raise FlexibeeDatabaseException('Rest PUT method error', r, url)
+            raise FlexibeeDatabaseException(r, url, 'Rest PUT method error')
         return r.json().get('winstrom').get('priloha')[0].get('id')
 
     def write(self, table_name, parent_id, data):
@@ -277,7 +277,7 @@ class AttachmentConnector(BaseConnector):
             r = requests.put(url, data=self._serialize(data), headers=headers, auth=(self.username, self.password))
         if r.status_code not in [200, 201]:
             self.logger.warning('Response %s, content: %s' % (r.status_code, force_text(r.text)))
-            raise FlexibeeDatabaseException('Rest PUT method error', r, url)
+            raise FlexibeeDatabaseException(r, url, 'Rest PUT method error')
 
         return pk or self._get_last_pk(table_name, parent_id)
 
@@ -291,7 +291,7 @@ class AttachmentConnector(BaseConnector):
         r = requests.delete(url, auth=(self.username, self.password))
         if r.status_code not in [200, 201]:
             self.logger.warning('Response %s, content: %s' % (r.status_code, force_text(r.text)))
-            raise FlexibeeDatabaseException('Rest DELETE method error', r, url)
+            raise FlexibeeDatabaseException(r, url, 'Rest DELETE method error')
 
     def get_response(self, table_name, parent_id, pk):
         self._check_settings(table_name)
@@ -332,7 +332,7 @@ class RelationConnector(BaseConnector):
         r = requests.put(url, data=self._serialize(data), auth=(self.username, self.password))
         if r.status_code not in [200, 201]:
             self.logger.warning('Response %s, content: %s' % (r.status_code, force_text(r.text)))
-            raise FlexibeeDatabaseException('Rest PUT method error', r, url)
+            raise FlexibeeDatabaseException(r, url, 'Rest PUT method error')
 
     def write(self, table_name, id, data):
         self._check_settings(table_name)
@@ -346,7 +346,7 @@ class RelationConnector(BaseConnector):
         r = requests.put(url, data=self._serialize(data), auth=(self.username, self.password))
         if r.status_code not in [200, 201]:
             self.logger.warning('Response %s, content: %s' % (r.status_code, force_text(r.text)))
-            raise FlexibeeDatabaseException('Rest PUT method error', r, url)
+            raise FlexibeeDatabaseException(r, url, 'Rest PUT method error')
 
 
 class CachedEntity(object):
