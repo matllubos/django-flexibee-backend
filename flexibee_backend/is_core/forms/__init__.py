@@ -59,7 +59,6 @@ class FlexibeeAttachmentForm(FlexibeeItemForm):
             file = self._get_file()
             return self.parent.attachments.add(filename=file.name, content_type=file.content_type, file=file.file,
                                                description=description, link=link)
-
         self.instance.link = link
         self.instance.description = description
 
