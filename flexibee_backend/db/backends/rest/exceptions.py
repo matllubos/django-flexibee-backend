@@ -10,12 +10,9 @@ class FlexibeeResponseException(DatabaseError):
         super(FlexibeeResponseException, self).__init__(self.message)
 
     def __str__(self):
-        print self.resp
         if not self.resp:
-            print 'a'
             return self.message
         else:
-            print 'ted'
             return 'url: %s\nmessage: %s\nresponse content: %s' % (self.url, self.message, self.resp.content)
 
 

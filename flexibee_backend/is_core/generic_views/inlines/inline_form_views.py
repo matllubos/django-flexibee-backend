@@ -2,7 +2,7 @@ from django.utils.translation import ugettext_lazy as _
 from django.forms.formsets import formset_factory
 
 from is_core.generic_views.inlines.inline_form_views import StackedInlineFormView, TabularInlineFormView
-from is_core.generic_views.exceptions import SaveObjectException
+from is_core.exceptions import SaveObjectException
 
 from flexibee_backend.db.backends.rest.exceptions import FlexibeeDatabaseException
 from flexibee_backend.is_core.forms import FlexibeeAttachmentForm

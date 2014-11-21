@@ -12,7 +12,7 @@ from is_core.generic_views.table_views import TableView
 from is_core.rest.resource import RestModelResource
 from is_core.patterns import RestPattern, DoubleRestPattern
 from is_core.generic_views.form_views import AddModelFormView, EditModelFormView
-from is_core.generic_views.exceptions import SaveObjectException
+from is_core.exceptions import SaveObjectException
 from is_core.actions import WebAction
 from is_core.utils import get_new_class_name
 from is_core.rest.factory import modelrest_factory
