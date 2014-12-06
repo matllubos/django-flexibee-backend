@@ -52,6 +52,10 @@ class BackendQuery(NonrelQuery):
     def __init__(self, compiler, fields):
         super(BackendQuery, self).__init__(compiler, fields)
         self.connector = self.connection.connector
+        self.model = self.query.model
+        self.internal_model = self.query.model._internal_model
+        self.internal_fields = self.query.model._internal_fields or ()
+
         store_via_field = self._get_store_via()
 
         query_kwargs = {}
@@ -63,9 +67,6 @@ class BackendQuery(NonrelQuery):
                 'via_fk_name': store_via_field.db_column or store_via_field.get_attname()
             }
 
-        self.model = self.query.model
-        self.internal_model = self.query.model._internal_model
-        self.internal_fields = self.query.model._internal_fields or ()
         self.db_query = RestQuery(self.connection.connector, self.query.model._meta.db_table,
                                   self._get_db_field_names(), **query_kwargs)
 
@@ -115,10 +116,9 @@ class BackendQuery(NonrelQuery):
         self._delete_internal_models(self.db_query.delete())
 
     def _fetch_internal_model(self, output):
-        internal_model = self.model._internal_model
-        if internal_model:
+        if self.internal_model:
             try:
-                internal_model_obj = internal_model._default_manager.get(
+                internal_model_obj = self.internal_model._default_manager.get(
                     flexibee_obj_id=output['id'], flexibee_company__flexibee_db_name=self.db_query.db_name
                 )
                 for field in self.fields:
@@ -129,15 +129,14 @@ class BackendQuery(NonrelQuery):
                 pass
 
     def _update_internal_model(self, data, pk):
-        internal_model = self.model._internal_model
-        if internal_model:
+        if self.internal_model:
             try:
-                internal_model_obj = internal_model._default_manager.get(
+                internal_model_obj = self.internal_model._default_manager.get(
                     flexibee_obj_id=pk, flexibee_company__flexibee_db_name=self.db_query.db_name
                 )
             except ObjectDoesNotExist:
-                company_model = internal_model._meta.get_field('flexibee_company').rel.to
-                internal_model_obj = internal_model(
+                company_model = self.internal_model._meta.get_field('flexibee_company').rel.to
+                internal_model_obj = self.internal_model(
                     flexibee_obj_id=pk,
                     flexibee_company=company_model._default_manager.get(flexibee_db_name=self.db_query.db_name)
                 )
@@ -149,10 +148,9 @@ class BackendQuery(NonrelQuery):
             internal_model_obj.save()
 
     def _delete_internal_models(self, pks):
-        internal_model = self.model._internal_model
-        if internal_model:
-            internal_model._default_manager.filter(flexibee_obj_id__in=pks,
-                                                   flexibee_company__flexibee_db_name=self.db_query.db_name).delete()
+        if self.internal_model:
+            self.internal_model._default_manager.filter(flexibee_obj_id__in=pks,
+                flexibee_company__flexibee_db_name=self.db_query.db_name).delete()
 
     def _filter_internal_data(self, data):
         internal_data = {}
@@ -442,7 +440,7 @@ class SQLInsertCompiler(NonrelInsertCompiler, SQLCompiler):
                                          "field) to None!" % field.name)
 
                 if field.get_attname() != 'flexibee_company_id' \
-                    and field.get_attname() not in self.model._flexibee_meta.readonly_fields \
+                    and field.get_attname() not in self.query.model._flexibee_meta.readonly_fields \
                     and not isinstance(field, DEFAULT_READONLY_FIELD_CLASSES):
 
                     # Prepare value for database, note that query.values have
@@ -467,7 +465,7 @@ class SQLUpdateCompiler(NonrelUpdateCompiler, SQLCompiler):
 
         for field, value in values:
             if field.get_attname() != 'flexibee_company_id'\
-                and field.get_attname() not in self.model._flexibee_meta.readonly_fields\
+                and field.get_attname() not in self.query.model._flexibee_meta.readonly_fields\
                 and not isinstance(field, DEFAULT_READONLY_FIELD_CLASSES):
 
                 db_value = self.convert_value_for_db(field.get_internal_type(), value)
