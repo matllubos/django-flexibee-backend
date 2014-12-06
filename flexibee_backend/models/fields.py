@@ -317,5 +317,5 @@ class CrossDatabaseForeignKey(CrossDatabaseForeignKeyMixin, ForeignKey):
     pass
 
 
-class OneToOneField(CrossDatabaseForeignKeyMixin, OneToOneField):
+class CrossDatabaseOneToOneField(CrossDatabaseForeignKeyMixin, OneToOneField):
     pass
