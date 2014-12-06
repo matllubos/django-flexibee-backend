@@ -7,10 +7,11 @@ from django.db.models.sql.where import AND
 from django.db.models.fields import NOT_PROVIDED
 from django.utils.tree import Node
 from django.utils.encoding import force_text
+from django.core.exceptions import ObjectDoesNotExist
 
 from djangotoolbox.db.basecompiler import (NonrelQuery, NonrelCompiler,
                                            NonrelInsertCompiler, NonrelUpdateCompiler,
-                                           NonrelDeleteCompiler, EmptyResultSet)
+                                           NonrelDeleteCompiler, EmptyResultSet, get_selected_fields)
 
 from dateutil.parser import parse
 
@@ -18,8 +19,9 @@ from .connection import RestQuery
 
 from flexibee_backend.models import StoreViaForeignKey, CompanyForeignKey, RemoteFileField
 from flexibee_backend.models.fields import ItemsField
-from flexibee_backend.db.backends.rest.filters import (ElementaryFilter, NotFilter, AndFilter,
-                                                       OrFilter)
+from flexibee_backend.db.backends.rest.filters import ElementaryFilter, NotFilter, AndFilter, OrFilter, \
+    ContradictionFilter
+
 
 
 # TODO: Change this to match your DB
@@ -61,11 +63,15 @@ class BackendQuery(NonrelQuery):
                 'via_fk_name': store_via_field.db_column or store_via_field.get_attname()
             }
 
+        self.model = self.query.model
+        self.internal_model = self.query.model._internal_model
+        self.internal_fields = self.query.model._internal_fields or ()
         self.db_query = RestQuery(self.connection.connector, self.query.model._meta.db_table,
                                   self._get_db_field_names(), **query_kwargs)
 
     def _get_db_field_names(self):
-        return [get_field_db_name(field) for field in self.fields if not isinstance(field, CompanyForeignKey)]
+        return [get_field_db_name(field) for field in self.fields if not isinstance(field, CompanyForeignKey)
+                                                                        and field.name not in self.internal_fields]
 
     # This is needed for debugging
     def __repr__(self):
@@ -75,7 +81,7 @@ class BackendQuery(NonrelQuery):
         return field.db_column or field.get_attname()
 
     def _get_store_via(self):
-        for field in self.query.model._meta.fields:
+        for field in self.model._meta.fields:
             if isinstance(field, StoreViaForeignKey):
                 return field
 
@@ -89,9 +95,7 @@ class BackendQuery(NonrelQuery):
             base = high_mark - low_mark
 
         for entity in self.db_query.fetch(low_mark, base):
-
             output = {}
-
             for field in self.fields:
                 db_field_name = get_field_db_name(field)
                 if db_field_name == 'flexibee_company_id':
@@ -99,22 +103,79 @@ class BackendQuery(NonrelQuery):
                 elif isinstance(field, (RemoteFileField, ItemsField)):
                     pass
                 else:
-                    output[db_field_name] = self.compiler.convert_value_from_db(field.get_internal_type(),
-                                                                                entity.get(db_field_name), db_field_name,
-                                                                                entity)
+                    output[db_field_name] = self.compiler.convert_value_from_db(
+                        field.get_internal_type(), entity.get(db_field_name), db_field_name, entity)
+            self._fetch_internal_model(output)
             yield output
 
     def count(self, limit=None):
         return self.db_query.count()
 
     def delete(self):
-        self.db_query.delete()
+        self._delete_internal_models(self.db_query.delete())
+
+    def _fetch_internal_model(self, output):
+        internal_model = self.model._internal_model
+        if internal_model:
+            try:
+                internal_model_obj = internal_model._default_manager.get(
+                    flexibee_obj_id=output['id'], flexibee_company__flexibee_db_name=self.db_query.db_name
+                )
+                for field in self.fields:
+                    db_field_name = get_field_db_name(field)
+                    if field.name in self.internal_fields:
+                        output[db_field_name] = getattr(internal_model_obj, db_field_name, None)
+            except ObjectDoesNotExist:
+                pass
+
+    def _update_internal_model(self, data, pk):
+        internal_model = self.model._internal_model
+        if internal_model:
+            try:
+                internal_model_obj = internal_model._default_manager.get(
+                    flexibee_obj_id=pk, flexibee_company__flexibee_db_name=self.db_query.db_name
+                )
+            except ObjectDoesNotExist:
+                company_model = internal_model._meta.get_field('flexibee_company').rel.to
+                internal_model_obj = internal_model(
+                    flexibee_obj_id=pk,
+                    flexibee_company=company_model._default_manager.get(flexibee_db_name=self.db_query.db_name)
+                )
+
+            for field in self.fields:
+                if field.name in self.internal_fields:
+                    db_field_name = get_field_db_name(field)
+                    setattr(internal_model_obj, db_field_name, data.get(db_field_name, None))
+            internal_model_obj.save()
+
+    def _delete_internal_models(self, pks):
+        internal_model = self.model._internal_model
+        if internal_model:
+            internal_model._default_manager.filter(flexibee_obj_id__in=pks,
+                                                   flexibee_company__flexibee_db_name=self.db_query.db_name).delete()
+
+    def _filter_internal_data(self, data):
+        internal_data = {}
+        for field in self.fields:
+            db_field_name = get_field_db_name(field)
+            if field.name in (self.internal_fields or ()) and db_field_name in data:
+                internal_data[db_field_name] = data[db_field_name]
+                del data[db_field_name]
+        return internal_data
 
     def insert(self, data):
-        return self.db_query.insert(data)
+        data = data[0]
+        internal_data = self._filter_internal_data(data)
+        pk = self.db_query.insert(data)
+        self._update_internal_model(internal_data, pk)
+        return pk
 
     def update(self, data):
-        return self.db_query.update(data)
+        internal_data = self._filter_internal_data(data)
+        pks = self.db_query.update(data)
+        for pk in pks:
+            self._update_internal_model(internal_data, pk)
+        return pks
 
     def order_by(self, ordering):
         if isinstance(ordering, (list, tuple)):
@@ -122,6 +183,13 @@ class BackendQuery(NonrelQuery):
                 self.db_query.add_ordering(field.db_column or field.get_attname(), is_asc)
 
     def _generate_elementary_filter(self, field, lookup_type, negated, value):
+        if field.name in self.internal_fields:
+            value = tuple(self.internal_model.objects.filter(flexibee_company__flexibee_db_name=self.db_query.db_name)\
+                                                     .filter(**{'%s__%s' % (field.name, lookup_type): value})\
+                                                     .values_list('flexibee_obj_id', flat=True))
+            lookup_type = 'in'
+            field = self.model._meta.pk
+
         try:
             op = OPERATORS_MAP[lookup_type]
         except KeyError:
@@ -131,9 +199,12 @@ class BackendQuery(NonrelQuery):
         if callable(op):
             op, value = op(lookup_type, value)
 
-        db_value = self.compiler.convert_filter_value_for_db(field.get_internal_type(), value)
-        return ElementaryFilter(field.db_column or field.get_attname(), op, db_value, negated)
+        if op == 'in' and not value:
+            return ContradictionFilter(negated)
 
+        db_value = self.compiler.convert_filter_value_for_db(field.get_internal_type(), value)
+
+        return ElementaryFilter(self._field_db_name(field), op, db_value, negated)
 
     def _generate_filter(self, filters):
         children = self._get_children(filters.children)
@@ -168,6 +239,36 @@ class BackendQuery(NonrelQuery):
         db_filter = self._generate_filter(filters)
         if db_filter is not None:
             self.db_query.add_filter(db_filter)
+
+    def get_fields(self):
+        """
+        Returns fields which should get loaded from the back-end by the
+        current query.
+        """
+
+        # We only set this up here because related_select_fields isn't
+        # populated until execute_sql() has been called.
+        fields = get_selected_fields(self.query)
+
+        # If the field was deferred, exclude it from being passed
+        # into `resolve_columns` because it wasn't selected.
+        only_load = self.deferred_to_columns()
+        if only_load:
+            db_table = self.model._meta.db_table
+            only_load = dict((k, v) for k, v in only_load.items()
+                             if v or k == db_table)
+            if len(only_load.keys()) > 1:
+                raise DatabaseError("Multi-table inheritance is not "
+                                    "supported by non-relational DBs %s." %
+                                    repr(only_load))
+            fields = [f for f in fields if db_table in only_load and
+                      f.column in only_load[db_table]]
+
+        query_model = self.model
+        if query_model._meta.proxy:
+            query_model = query_model._meta.proxy_for_model
+
+        return fields
 
 
 class SQLDataCompiler(object):
@@ -341,8 +442,9 @@ class SQLInsertCompiler(NonrelInsertCompiler, SQLCompiler):
                                          "field) to None!" % field.name)
 
                 if field.get_attname() != 'flexibee_company_id' \
-                    and field.get_attname() not in self.query.model._flexibee_meta.readonly_fields \
+                    and field.get_attname() not in self.model._flexibee_meta.readonly_fields \
                     and not isinstance(field, DEFAULT_READONLY_FIELD_CLASSES):
+
                     # Prepare value for database, note that query.values have
                     # already passed through get_db_prep_save.
                     value = self.ops.value_for_db(value, field)
@@ -365,7 +467,7 @@ class SQLUpdateCompiler(NonrelUpdateCompiler, SQLCompiler):
 
         for field, value in values:
             if field.get_attname() != 'flexibee_company_id'\
-                and field.get_attname() not in self.query.model._flexibee_meta.readonly_fields\
+                and field.get_attname() not in self.model._flexibee_meta.readonly_fields\
                 and not isinstance(field, DEFAULT_READONLY_FIELD_CLASSES):
 
                 db_value = self.convert_value_for_db(field.get_internal_type(), value)

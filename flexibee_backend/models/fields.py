@@ -1,14 +1,17 @@
 import string
 import random
 
+from copy import deepcopy
+
 from django.db import models
-from django.db.models.fields.related import ForeignKey
-from django.db.models.fields import Field, CharField
+from django.db.models.fields.related import ForeignKey, OneToOneField
+from django.db.models.fields import Field, CharField, FieldDoesNotExist
 from django.core.exceptions import ObjectDoesNotExist
 from django.http.response import HttpResponse
 from django.utils import timezone
+from django.core import exceptions
 
-from flexibee_backend.db.utils import (get_connector, get_db_name)
+from flexibee_backend.db.utils import get_connector, get_db_name, set_db_name
 from flexibee_backend.db.backends.rest.connection import ModelConnector
 from flexibee_backend.db.backends.rest.exceptions import FlexibeeDatabaseException
 from flexibee_backend import config
@@ -16,7 +19,84 @@ from flexibee_backend import config
 from calendar import timegm
 
 
-class CompanyForeignKey(ForeignKey):
+class InternalModel(models.Model):
+
+    flexibee_obj_id = models.PositiveIntegerField(null=False, blank=False, editable=False)
+    flexibee_company = models.ForeignKey(config.FLEXIBEE_COMPANY_MODEL, null=False, blank=False, editable=False)
+
+    _flexibee_obj_cache = None
+
+    @property
+    def flexibee_obj(self):
+        if not self._flexibee_obj_cache:
+            db_name_cache = get_db_name()
+            set_db_name(self.flexibee_company.flexibee_db_name)
+            self._flexibee_obj_cache = self._flexibee_model.objects.get(pk=self.flexibee_obj_id)
+            self._flexibee_obj_cache._internal_obj_cache = self
+            set_db_name(db_name_cache)
+        return self._flexibee_obj_cache
+
+    class Meta:
+        abstract = True
+        unique_together = ('flexibee_obj_id', 'flexibee_company')
+
+
+def create_internal_db(cls):
+    internal_fields = ()
+
+    if hasattr(cls, 'FlexibeeMeta'):
+        internal_fields = cls.FlexibeeMeta.__dict__.pop('internal_fields', ())
+    parents = []
+
+
+    all_internal_fields = list(internal_fields)
+    for base in cls.__bases__:
+        if hasattr(base, '_internal_model') and base._internal_model:
+            parents.append(base._internal_model)
+            all_internal_fields += base._internal_fields
+
+    cls._internal_fields = all_internal_fields
+
+    fields = {}
+
+    for field_name in internal_fields:
+        try:
+            fields[field_name] = deepcopy(cls._meta.get_field(field_name))
+            if hasattr(fields[field_name], 'rel'):
+                fields[field_name].rel.related_name = 'internal_%s' % (fields[field_name].rel.related_name or '+')
+
+        except FieldDoesNotExist:
+            pass
+
+    if fields or parents:
+        name = '%sInternal' % cls.__name__
+        meta = type('Meta', (object,), {
+            'abstract': cls._meta.abstract
+        })
+
+        cls_kwargs = fields.copy()
+        cls_kwargs['Meta'] = meta
+        cls_kwargs['__module__'] = cls.__module__
+        cls_kwargs['_flexibee_model'] = cls
+
+        parents = parents or (InternalModel,)
+        return type(str(name), tuple(parents), cls_kwargs)
+
+
+class SouthFieldMixin(object):
+
+    def south_field_triple(self):
+        from south.modelsinspector import introspector
+        cls_name = '%s.%s' % (self.__class__.__module__ , self.__class__.__name__)
+        args, kwargs = introspector(self)
+        return (cls_name, args, kwargs)
+
+
+class CompanyForeignKey(SouthFieldMixin, ForeignKey):
+
+    def contribute_to_class(self, cls, name, virtual_only=False):
+        setattr(cls, '_internal_model', create_internal_db(cls))
+        super(CompanyForeignKey, self).contribute_to_class(cls, name, virtual_only=virtual_only)
 
     def pre_save(self, model_instance, add):
         """
@@ -28,7 +108,7 @@ class CompanyForeignKey(ForeignKey):
         return super(CompanyForeignKey, self).pre_save(model_instance, add)
 
 
-class StoreViaForeignKey(ForeignKey):
+class StoreViaForeignKey(SouthFieldMixin, ForeignKey):
 
     def __init__(self, to, db_relation_name=None, *args, **kwargs):
         kwargs['on_delete'] = models.DO_NOTHING
@@ -39,7 +119,7 @@ class StoreViaForeignKey(ForeignKey):
         return 'StoreViaForeignKey'
 
 
-class FlexibeeExtKey(CharField):
+class FlexibeeExtKey(SouthFieldMixin, CharField):
 
     def __init__(self, *args, **kwargs):
         kwargs['max_length'] = 255
@@ -186,7 +266,7 @@ class ItemsDescriptor(object):
         instance.__dict__[self.field.name] = value
 
 
-class RemoteFileField(Field):
+class RemoteFileField(SouthFieldMixin, Field):
 
     def __init__(self, verbose_name=None, name=None, type=None, **kwargs):
         super(RemoteFileField, self).__init__(verbose_name=verbose_name, name=name, **kwargs)
@@ -197,9 +277,9 @@ class RemoteFileField(Field):
         setattr(cls, self.name, RemoteFileDescriptor(self))
 
 
-class ItemsField(Field):
+class ItemsField(SouthFieldMixin, Field):
 
-    def __init__(self, item_class, *args, **kwargs):
+    def __init__(self, item_class=None, *args, **kwargs):
         kwargs['editable'] = False
         super(ItemsField, self).__init__(*args, **kwargs)
         self.item_class = item_class
@@ -210,3 +290,32 @@ class ItemsField(Field):
 
     def formfield(self, **kwargs):
         return None
+
+
+class CrossDatabaseForeignKeyMixin(SouthFieldMixin):
+
+    def validate(self, value, model_instance):
+        if self.rel.parent_link:
+            return
+        super(ForeignKey, self).validate(value, model_instance)
+        if value is None:
+            return
+
+        qs = self.rel.to._default_manager.filter(
+            **{self.rel.field_name: value}
+        )
+        qs = qs.complex_filter(self.rel.limit_choices_to)
+        if not qs.exists():
+            raise exceptions.ValidationError(
+                self.error_messages['invalid'],
+                code='invalid',
+                params={'model': self.rel.to._meta.verbose_name, 'pk': value},
+            )
+
+
+class CrossDatabaseForeignKey(CrossDatabaseForeignKeyMixin, ForeignKey):
+    pass
+
+
+class OneToOneField(CrossDatabaseForeignKeyMixin, OneToOneField):
+    pass

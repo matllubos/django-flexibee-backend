@@ -13,8 +13,8 @@ from flexibee_backend.db.backends.rest.utils import db_name_validator
 from flexibee_backend.db.backends.rest.admin_connection import admin_connector
 from flexibee_backend.db.backends.rest.exceptions import SyncException
 from flexibee_backend.db.backends.rest.connection import AttachmentConnector, RelationConnector
-from flexibee_backend import config
 from flexibee_backend.models.utils import get_model_by_db_table, lazy_obj_loader
+from flexibee_backend.db.utils import set_db_name
 
 
 class FlexibeeItem(object):
@@ -331,7 +331,17 @@ class FlexibeeModel(models.Model):
     flexibee_company = CompanyForeignKey(config.FLEXIBEE_COMPANY_MODEL, null=True, blank=True, editable=False,
                                          on_delete=models.DO_NOTHING)
     flexibee_ext_id = FlexibeeExtKey(null=False, blank=False, editable=False, db_column='external-ids')
+
     _flexibee_meta = OptionsLazy('_flexibee_meta', FlexibeeOptions)
+    _internal_obj_cache = None
+
+    @property
+    def internal_obj(self):
+        if not self._internal_obj_cache:
+            self._internal_obj_cache = self._internal_model.objects.get(flexibee_company=self.flexibee_company,
+                                                                        flexibee_obj_id=self.pk)
+            self._internal_obj_cache._flexibee_obj_cache = self
+        return self._internal_obj_cache
 
     class Meta:
         abstract = True

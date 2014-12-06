@@ -1,5 +1,6 @@
 from django.utils.encoding import force_text
 
+
 class BaseFilter(object):
 
     def __unicode__(self):
@@ -7,7 +8,7 @@ class BaseFilter(object):
 
     def __cmp__(self, other):
         return cmp(unicode(self), unicode(self))
-    
+
     def __str__(self):
         return self.__unicode__()
 
@@ -23,7 +24,7 @@ class NotFilter(BaseFilter):
 
 class ComposedFilter(BaseFilter):
     operator = None
-    
+
     def __init__(self):
         self.children = []
 
@@ -40,6 +41,19 @@ class AndFilter(ComposedFilter):
 
 class OrFilter(ComposedFilter):
     operator = 'or'
+
+
+# Trick
+class ContradictionFilter(BaseFilter):
+
+    def __init__(self, negated):
+        self.negated = negated
+
+    def __unicode__(self):
+        if self.negated:
+            return 'id>0'
+        else:
+            return 'id=0'
 
 
 class ElementaryFilter(BaseFilter):

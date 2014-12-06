@@ -78,7 +78,7 @@ class ModelConnector(BaseConnector):
 
     def _get_query_string(self, fields, relations, ordering, offset, base):
         query_string_list = [
-                             ('detail', 'custom:%s' % ','.join(fields)),
+            ('detail', 'custom:%s' % ','.join(fields)),
         ]
         if relations:
             query_string_list.append(('relations', ','.join(relations)))
@@ -200,6 +200,7 @@ class ModelConnector(BaseConnector):
         else:
             self._clear_table_cache(table_name)
             self.logger.info('Response %s, content: %s' % (r.status_code, force_text(r.text)))
+            return r.json().get('winstrom')
 
     def get_response(self, table_name, id, type):
         self._check_settings(table_name)
@@ -228,7 +229,7 @@ class ModelConnector(BaseConnector):
 
     def reset(self):
         super(ModelConnector, self).reset()
-        self.db_name = None
+        self.cache = {}
 
 
 class AttachmentConnector(BaseConnector):
@@ -356,6 +357,7 @@ class CachedEntity(object):
         self.fields = fields
 
 
+# TODO Refactorization encessary
 class RestQuery(object):
 
     def __init__(self, connector, table_name, fields=[], relations=[], via_table_name=None, via_relation_name=None,
@@ -407,31 +409,32 @@ class RestQuery(object):
         if self._is_via():
             return self._store_via(data)
         else:
-            output = self.connector.write(self.table_name, data)
+            output = self.connector.write(self.table_name, [data])
             return output.get('results')[0].get('id')
 
     def _store_via(self, data):
-        for obj_data in data:
-            store_view_db_query = RestQuery(self.connector, self.via_table_name, ['id'],
-                                            [self.via_relation_name])
-            store_view_db_query.add_filter(ElementaryFilter('id', '=',
-                                                            obj_data.get(self.via_fk_name), False))
-            via_data = {'id': str(obj_data.get(self.via_fk_name))}
-            via_data[self.via_relation_name] = [self.connector._prepare_obj_data(obj_data)]
 
-            store_view_db_query.update(via_data)
-            store_view_db_query.connector._clear_table_cache(self.table_name)
+        store_view_db_query = RestQuery(self.connector, self.via_table_name, ['id'],
+                                        [self.via_relation_name])
+        store_view_db_query.add_filter(ElementaryFilter('id', '=', data.get(self.via_fk_name), False))
 
-            if 'id' in obj_data:
-                return obj_data['id']
-            else:
-                query = RestQuery(self.connector, self.table_name, ['id'])
-                query.add_filter(ElementaryFilter(self.via_fk_name, '=',
-                                                  obj_data.get(self.via_fk_name), False))
+        via_data = {'id': str(data.get(self.via_fk_name))}
+        via_data[self.via_relation_name] = [self.connector._prepare_obj_data(data)]
 
-                query.add_filter(ElementaryFilter('id', '=',
-                                                  '\'%s\'' % obj_data.get('external-ids'), False))
-                return query.fetch(0, 1)[0].get('id')
+        store_view_db_query.update(via_data)
+        store_view_db_query.connector._clear_table_cache(self.table_name)
+
+        if 'id' in data:
+            return data['id']
+        else:
+            query = RestQuery(self.connector, self.table_name, ['id'])
+            query.add_filter(ElementaryFilter(self.via_fk_name, '=',
+                                              data.get(self.via_fk_name), False))
+
+            query.add_filter(ElementaryFilter('id', '=',
+                                                  '\'%s\'' % data.get('external-ids'), False))
+            fetch = query.fetch(0, 1)
+            return fetch[0].get('id')
 
     def _get_deleted_objects_via_obj(self):
         result = {}
@@ -443,6 +446,7 @@ class RestQuery(object):
         return result
 
     def _delete_via(self):
+        all_deleted_pks = []
         for parent_pk, deleted_pks in self._get_deleted_objects_via_obj().items():
             store_view_db_query = RestQuery(
                 self.connector, self.via_table_name, ['id'], [self.via_relation_name]
@@ -459,27 +463,38 @@ class RestQuery(object):
             store_view_db_query.update(parent_data)
             store_view_db_query.connector._clear_table_cache(self.table_name)
 
+            all_deleted_pks += deleted_pks
+        return all_deleted_pks
+
     def update(self, data):
         updated_data = data
         data = []
         if not self.connector._is_request_for_one_object(self.filters):
             for entity in self.get().get(self.table_name):
                 entity_value = updated_data.copy()
-                pk = entity.get('id')
                 entity_value['id'] = entity.get('id')
+                if self._is_via() and self.via_fk_name not in entity_value:
+                    entity_value[self.via_fk_name] = entity.get(self.via_fk_name)
                 data.append(entity_value)
         else:
-            updated_data['id'] = self.filters[0].value
-            data.append(updated_data)
+            try:
+                if self._is_via() and self.via_fk_name not in updated_data:
+                    updated_data[self.via_fk_name] = self.get().get(self.table_name)[0][self.via_fk_name]
+                updated_data['id'] = self.filters[0].value
+                data.append(updated_data)
+            except IndexError:
+                # Object does not exists in flexibee DB
+                pass
 
         if self._is_via():
-            self._store_via(data)
+            map(self._store_via, data)
+            return [entity['id'] for entity in data]
         else:
             self.connector.write(self.table_name, data)
-            return len(data)
+            return [entity['id'] for entity in data]
 
     def delete(self):
         if self._is_via():
-            self._delete_via()
+            return self._delete_via()
         else:
-            self.connector.delete(self.table_name, self.filters)
+            return [entity['id'] for entity in self.connector.delete(self.table_name, self.filters).get('results', ())]
