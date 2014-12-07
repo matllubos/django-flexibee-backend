@@ -62,7 +62,7 @@ def create_internal_db(cls):
     for field_name in internal_fields:
         try:
             fields[field_name] = deepcopy(cls._meta.get_field(field_name))
-            if hasattr(fields[field_name], 'rel'):
+            if hasattr(fields[field_name], 'rel') and fields[field_name].rel:
                 fields[field_name].rel.related_name = 'internal_%s' % (fields[field_name].rel.related_name or '+')
 
         except FieldDoesNotExist:

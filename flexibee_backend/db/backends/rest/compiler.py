@@ -178,7 +178,8 @@ class BackendQuery(NonrelQuery):
     def order_by(self, ordering):
         if isinstance(ordering, (list, tuple)):
             for field, is_asc in ordering:
-                self.db_query.add_ordering(field.db_column or field.get_attname(), is_asc)
+                if not field.name in self.internal_fields:
+                    self.db_query.add_ordering(field.db_column or field.get_attname(), is_asc)
 
     def _generate_elementary_filter(self, field, lookup_type, negated, value):
         if field.name in self.internal_fields:
