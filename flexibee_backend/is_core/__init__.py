@@ -76,6 +76,9 @@ class FlexibeeIsCore(UIRestModelISCore):
     def get_menu_groups(self):
         return self.menu_parent_groups + [self.menu_group]
 
+    def has_read_attachment_permission(self, request, obj):
+        return self.has_read_permission(request, obj)
+
 
 class ItemIsCore(RestModelISCore):
     abstract = True
