@@ -1,6 +1,31 @@
 from django.db.utils import DatabaseError
 
 
+class FlexibeeDatabaseError(DatabaseError):
+
+    def __init__(self, message=None):
+        self.message = message
+
+    def __unicode__(self):
+        return self.message
+
+
+class FlexibeeResponseError(FlexibeeDatabaseError):
+
+    def __init__(self, resp, message=None):
+        super(FlexibeeResponseError, self).__init__(message)
+        self.resp = resp
+
+
+class ChangesNotActivatedFlexibeeResponseError(FlexibeeResponseError):
+
+    def __init__(self, resp):
+        super(ChangesNotActivatedFlexibeeResponseError, self).__init__(resp, msg='Changes is not activated')
+
+
+
+
+
 class FlexibeeResponseException(DatabaseError):
 
     def __init__(self, resp=None, url=None, msg=None):
@@ -42,11 +67,6 @@ class FlexibeeDatabaseException(FlexibeeResponseException):
                         errors.append(error_dict.get('message'))
         return '\n'.join(errors)
 
-
-class ChangesNotActivatedFlexibeeDatabaseException(FlexibeeDatabaseException):
-
-    def __init__(self, resp):
-        super(ChangesNotActivatedFlexibeeDatabaseException, self).__init__(resp, msg='Changes is not activated')
 
 
 class SyncException(FlexibeeResponseException):

@@ -48,7 +48,6 @@ def create_internal_db(cls):
         internal_fields = cls.FlexibeeMeta.__dict__.pop('internal_fields', ())
     parents = []
 
-
     all_internal_fields = list(internal_fields)
     for base in cls.__bases__:
         if hasattr(base, '_internal_model') and base._internal_model:
