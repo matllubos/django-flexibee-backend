@@ -16,3 +16,6 @@ class AttachmentFileView(DefaultCoreViewMixin, View):
             return self.get_obj().attachments.get(self.request.kwargs.get('attachment_pk')).file_response
         except ObjectDoesNotExist:
             raise Http404
+
+    def has_get_permission(self, **kwargs):
+        return self.core.has_read_attachment_permission(self.request, self.get_obj())
