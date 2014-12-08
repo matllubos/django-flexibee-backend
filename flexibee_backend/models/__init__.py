@@ -14,7 +14,6 @@ from flexibee_backend.db.backends.rest.admin_connection import admin_connector
 from flexibee_backend.db.backends.rest.exceptions import SyncException
 from flexibee_backend.db.backends.rest.connection import AttachmentConnector, RelationConnector
 from flexibee_backend.models.utils import get_model_by_db_table, lazy_obj_loader
-from flexibee_backend.db.utils import set_db_name
 
 
 class FlexibeeItem(object):

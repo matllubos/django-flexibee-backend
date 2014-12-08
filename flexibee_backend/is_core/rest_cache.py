@@ -3,7 +3,7 @@ from django.db.transaction import get_connection
 from piston.cache import DefaultRestCache
 
 from flexibee_backend import config
-from flexibee_backend.db.backends.rest.exceptions import ChangesNotActivatedFlexibeeDatabaseException
+from flexibee_backend.db.backends.rest.exceptions import ChangesNotActivatedFlexibeeResponseError
 
 
 class FlexibeeCachedResponseWrapper(object):
@@ -32,6 +32,6 @@ class FlexibeeDefaultRestCache(DefaultRestCache):
     def _get_changes_version(self):
         try:
             return get_connection(config.FLEXIBEE_BACKEND_NAME).connector.changes(1)
-        except ChangesNotActivatedFlexibeeDatabaseException:
+        except ChangesNotActivatedFlexibeeResponseError:
             get_connection(config.FLEXIBEE_BACKEND_NAME).connector.activate_changes()
             return -1

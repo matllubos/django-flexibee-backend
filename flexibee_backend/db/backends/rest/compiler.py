@@ -53,8 +53,6 @@ class BackendQuery(NonrelQuery):
         super(BackendQuery, self).__init__(compiler, fields)
         self.connector = self.connection.connector
         self.model = self.query.model
-        self.internal_model = self.query.model._internal_model
-        self.internal_fields = self.query.model._internal_fields or ()
 
         store_via_field = self._get_store_via()
 
@@ -69,10 +67,12 @@ class BackendQuery(NonrelQuery):
 
         self.db_query = RestQuery(self.connection.connector, self.query.model._meta.db_table,
                                   self._get_db_field_names(), **query_kwargs)
+        self.internal_query = InternalModelQuery(self.model, fields, self.db_query)
 
     def _get_db_field_names(self):
-        return [get_field_db_name(field) for field in self.fields if not isinstance(field, CompanyForeignKey)
-                                                                        and field.name not in self.internal_fields]
+        return [get_field_db_name(field) for field in self.fields
+                    if not isinstance(field, CompanyForeignKey)
+                        and field.name not in self.model._internal_fields]
 
     # This is needed for debugging
     def __repr__(self):
@@ -106,88 +106,44 @@ class BackendQuery(NonrelQuery):
                 else:
                     output[db_field_name] = self.compiler.convert_value_from_db(
                         field.get_internal_type(), entity.get(db_field_name), db_field_name, entity)
-            self._fetch_internal_model(output)
-            yield output
+            yield self.internal_query.fetch(output)
 
     def count(self, limit=None):
         return self.db_query.count()
 
     def delete(self):
-        self._delete_internal_models(self.db_query.delete())
-
-    def _fetch_internal_model(self, output):
-        if self.internal_model:
-            try:
-                internal_model_obj = self.internal_model._default_manager.get(
-                    flexibee_obj_id=output['id'], flexibee_company__flexibee_db_name=self.db_query.db_name
-                )
-                for field in self.fields:
-                    db_field_name = get_field_db_name(field)
-                    if field.name in self.internal_fields:
-                        output[db_field_name] = getattr(internal_model_obj, db_field_name, None)
-            except ObjectDoesNotExist:
-                pass
-
-    def _update_internal_model(self, data, pk):
-        if self.internal_model:
-            try:
-                internal_model_obj = self.internal_model._default_manager.get(
-                    flexibee_obj_id=pk, flexibee_company__flexibee_db_name=self.db_query.db_name
-                )
-            except ObjectDoesNotExist:
-                company_model = self.internal_model._meta.get_field('flexibee_company').rel.to
-                internal_model_obj = self.internal_model(
-                    flexibee_obj_id=pk,
-                    flexibee_company=company_model._default_manager.get(flexibee_db_name=self.db_query.db_name)
-                )
-
-            for field in self.fields:
-                if field.name in self.internal_fields:
-                    db_field_name = get_field_db_name(field)
-                    setattr(internal_model_obj, db_field_name, data.get(db_field_name, None))
-            internal_model_obj.save()
-
-    def _delete_internal_models(self, pks):
-        if self.internal_model:
-            self.internal_model._default_manager.filter(flexibee_obj_id__in=pks,
-                flexibee_company__flexibee_db_name=self.db_query.db_name).delete()
-
-    def _filter_internal_data(self, data):
-        internal_data = {}
-        for field in self.fields:
-            db_field_name = get_field_db_name(field)
-            if field.name in (self.internal_fields or ()) and db_field_name in data:
-                internal_data[db_field_name] = data[db_field_name]
-                del data[db_field_name]
-        return internal_data
+        self.internal_query.delete(self.db_query.delete())
 
     def insert(self, data):
-        data = data[0]
-        internal_data = self._filter_internal_data(data)
-        pk = self.db_query.insert(data)
-        self._update_internal_model(internal_data, pk)
-        return pk
+        assert len(data) == 1
+
+        data, internal_data = self.internal_query.split_data(data[0])
+        return self.internal_query.update(internal_data, self.db_query.insert(data))
 
     def update(self, data):
-        internal_data = self._filter_internal_data(data)
+        data, internal_data = self.internal_query.split_data(data)
         pks = self.db_query.update(data)
         for pk in pks:
-            self._update_internal_model(internal_data, pk)
+            self.internal_query.update(internal_data, pk)
         return pks
 
     def order_by(self, ordering):
         if isinstance(ordering, (list, tuple)):
-            for field, is_asc in ordering:
-                if not field.name in self.internal_fields:
-                    self.db_query.add_ordering(field.db_column or field.get_attname(), is_asc)
+            self._fields_order_by(ordering)
+        else:
+            self._natural_order_by(bool(ordering))
+
+    def _fields_order_by(self, ordering):
+        for field, is_asc in ordering:
+            if not self.internal_query.is_internal(field):
+                self.db_query.add_ordering(field.db_column or field.get_attname(), is_asc)
+
+    def _natural_order_by(self, is_asc):
+        self.db_query.add_ordering('id', is_asc)
 
     def _generate_elementary_filter(self, field, lookup_type, negated, value):
-        if field.name in self.internal_fields:
-            value = tuple(self.internal_model.objects.filter(flexibee_company__flexibee_db_name=self.db_query.db_name)\
-                                                     .filter(**{'%s__%s' % (field.name, lookup_type): value})\
-                                                     .values_list('flexibee_obj_id', flat=True))
-            lookup_type = 'in'
-            field = self.model._meta.pk
+        if self.internal_query.is_internal(field):
+            field, lookup_type, negated, value = self.internal_query.convert_filter(field, lookup_type, negated, value)
 
         try:
             op = OPERATORS_MAP[lookup_type]
@@ -239,35 +195,79 @@ class BackendQuery(NonrelQuery):
         if db_filter is not None:
             self.db_query.add_filter(db_filter)
 
-    def get_fields(self):
-        """
-        Returns fields which should get loaded from the back-end by the
-        current query.
-        """
 
-        # We only set this up here because related_select_fields isn't
-        # populated until execute_sql() has been called.
-        fields = get_selected_fields(self.query)
+class InternalModelQuery(object):
 
-        # If the field was deferred, exclude it from being passed
-        # into `resolve_columns` because it wasn't selected.
-        only_load = self.deferred_to_columns()
-        if only_load:
-            db_table = self.model._meta.db_table
-            only_load = dict((k, v) for k, v in only_load.items()
-                             if v or k == db_table)
-            if len(only_load.keys()) > 1:
-                raise DatabaseError("Multi-table inheritance is not "
-                                    "supported by non-relational DBs %s." %
-                                    repr(only_load))
-            fields = [f for f in fields if db_table in only_load and
-                      f.column in only_load[db_table]]
+    def __init__(self, flexibee_model, fields, db_query):
+        self.flexibee_model = flexibee_model
+        self.internal_model = flexibee_model._internal_model
+        self.internal_field_names = flexibee_model._internal_fields or ()
 
-        query_model = self.model
-        if query_model._meta.proxy:
-            query_model = query_model._meta.proxy_for_model
+        self._internal_fields = None
+        self.db_query = db_query
+        self.fields = fields
 
-        return fields
+    @property
+    def internal_fields(self):
+        if not self._internal_fields:
+            self._internal_fields = [field for field in self.fields if field.name in self.internal_field_names]
+        return self._internal_fields
+
+    def is_internal(self, field):
+        return self.internal_model and field.name in self.internal_field_names
+
+    def convert_filter(self, field, lookup_type, negated, value):
+        if self.is_internal(field):
+            value = tuple(self.internal_model.objects.filter(flexibee_company__flexibee_db_name=self.db_query.db_name)\
+                                                     .filter(**{'%s__%s' % (field.name, lookup_type): value})\
+                                                     .values_list('flexibee_obj_id', flat=True))
+            lookup_type = 'in'
+            field = self.flexibee_model._meta.pk
+        return field, lookup_type, negated, value
+
+    def fetch(self, output):
+        if self.internal_model:
+            try:
+                internal_model_obj = self.internal_model._default_manager.get(
+                    flexibee_obj_id=output['id'], flexibee_company__flexibee_db_name=self.db_query.db_name
+                )
+                for field in self.internal_fields:
+                    db_field_name = get_field_db_name(field)
+                    output[db_field_name] = getattr(internal_model_obj, db_field_name, None)
+            except ObjectDoesNotExist:
+                pass
+        return output
+
+    def delete(self, pks):
+        if self.internal_model:
+            self.internal_model._default_manager.filter(flexibee_obj_id__in=pks,
+                flexibee_company__flexibee_db_name=self.db_query.db_name).delete()
+
+    def update(self, data, pk):
+        if self.internal_model:
+            try:
+                internal_model_obj = self.internal_model._default_manager.get(
+                    flexibee_obj_id=pk, flexibee_company__flexibee_db_name=self.db_query.db_name
+                )
+            except ObjectDoesNotExist:
+                company_model = self.internal_model._meta.get_field('flexibee_company').rel.to
+                internal_model_obj = self.internal_model(
+                    flexibee_obj_id=pk,
+                    flexibee_company=company_model._default_manager.get(flexibee_db_name=self.db_query.db_name)
+                )
+            for field in self.internal_fields:
+                db_field_name = get_field_db_name(field)
+                setattr(internal_model_obj, db_field_name, data.get(db_field_name, None))
+            internal_model_obj.save()
+        return pk
+
+    def split_data(self, data):
+        internal_data = {}
+        for field in self.internal_fields:
+            db_field_name = get_field_db_name(field)
+            internal_data[db_field_name] = data[db_field_name]
+            del data[db_field_name]
+        return data, internal_data
 
 
 class SQLDataCompiler(object):

@@ -5,12 +5,12 @@ import decimal
 
 from django.db.utils import DatabaseError
 from django.utils.encoding import force_text
-from django.utils.datastructures import SortedDict
 from django.utils.http import urlquote
 
 from flexibee_backend.db.backends.rest.exceptions import (FlexibeeDatabaseException,
-                                                          ChangesNotActivatedFlexibeeDatabaseException)
+                                                          ChangesNotActivatedFlexibeeResponseError)
 from flexibee_backend.db.backends.rest.filters import ElementaryFilter
+from flexibee_backend.db.backends.rest.cache import ResponseCache
 
 
 def decimal_default(obj):
@@ -46,7 +46,9 @@ class ModelConnector(BaseConnector):
     def __init__(self, username, password, hostname):
         super(ModelConnector, self).__init__(username, password, hostname)
         self.cache = {}
-        self.waiting_writes = SortedDict()
+
+        self.cache2 = ResponseCache(self)
+
 
     def _is_request_for_one_object(self, filters):
         return (len(filters) == 1 and isinstance(filters[0], ElementaryFilter) and
@@ -142,6 +144,7 @@ class ModelConnector(BaseConnector):
         self.logger.info('Send GET to %s' % url)
         r = requests.get(url, auth=(self.username, self.password))
 
+
         if r.status_code in [200, 201]:
             self.logger.info('Response %s, content: %s' % (r.status_code, force_text(r.text)))
             data = r.json().get('winstrom')
@@ -217,7 +220,7 @@ class ModelConnector(BaseConnector):
         r = requests.get(url, auth=(self.username, self.password))
         if r.status_code not in [200, 404]:
             self.logger.info('Response %s, content: %s' % (r.status_code, force_text(r.text)))
-            raise ChangesNotActivatedFlexibeeDatabaseException(r)
+            raise ChangesNotActivatedFlexibeeResponseError(r)
         return int(r.json().get('winstrom').get('@globalVersion'))
 
     def activate_changes(self):
