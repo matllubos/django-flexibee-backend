@@ -265,8 +265,7 @@ class InternalModelQuery(object):
         internal_data = {}
         for field in self.internal_fields:
             db_field_name = get_field_db_name(field)
-            internal_data[db_field_name] = data[db_field_name]
-            del data[db_field_name]
+            internal_data[db_field_name] = data.pop(db_field_name, None)
         return data, internal_data
 
 

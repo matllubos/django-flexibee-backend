@@ -10,7 +10,7 @@ from django.utils.http import urlquote
 from flexibee_backend.db.backends.rest.exceptions import (FlexibeeDatabaseException,
                                                           ChangesNotActivatedFlexibeeResponseError)
 from flexibee_backend.db.backends.rest.filters import ElementaryFilter
-from flexibee_backend.db.backends.rest.cache import ResponseCache
+from flexibee_backend.db.backends.rest.cache import ResponseCache, ModelCacheKeysGenerator, ItemCacheKeysGenerator
 
 
 def decimal_default(obj):
@@ -22,6 +22,7 @@ def decimal_default(obj):
 class BaseConnector(object):
 
     URL = 'https://%(hostname)s/c/%(db_name)s/%(table_name)s%(extra)s.%(type)s?%(query_string)s'
+    JSON_HEADER = {'Accept': 'application/json'}
     logger = logging.getLogger('flexibee-backend')
 
     def __init__(self, username, password, hostname):
@@ -40,23 +41,82 @@ class BaseConnector(object):
     def reset(self):
         self.db_name = None
 
+    def http_get(self, url):
+        self.logger.info('Sending GET to %s' % url)
+        r = requests.get(url, auth=(self.username, self.password))
+        self.logger.info('Receiving response %s' % r.status_code)
+        return r
 
-class ModelConnector(BaseConnector):
+    def http_put(self, url, data=None, headers=None):
+        self.logger.info('Sending PUT to %s' % url)
+        if data is None:
+            r = requests.put(url, auth=(self.username, self.password))
+        else:
+            r = requests.put(url, data=self._serialize(data), headers=headers, auth=(self.username, self.password))
+        self.logger.info('Receiving response %s' % r.status_code)
+        return r
 
-    def __init__(self, username, password, hostname):
-        super(ModelConnector, self).__init__(username, password, hostname)
-        self.cache = {}
+    def http_delete(self, url):
+        self.logger.info('Sending DELETE to %s' % url)
+        r = requests.delete(url, auth=(self.username, self.password))
+        self.logger.info('Receiving response %s' % r.status_code)
+        return r
 
-        self.cache2 = ResponseCache(self)
+    def _generate_url(self, extra, table_name, query_string, type):
+        return  self.URL % {
+            'hostname': self.hostname, 'db_name': self.db_name, 'extra': extra, 'table_name': table_name,
+            'query_string': query_string, 'type': type
+        }
 
 
-    def _is_request_for_one_object(self, filters):
+class CachedConnector(BaseConnector):
+    CHANGES_TABLE_NAME = 'changes'
+
+    def _get_cache(self, *args):
+        return ResponseCache(self, self._get_cache_keys_generator(*args))
+
+    def _get_cache_keys_generator(self, *args):
+        raise NotImplementedError
+
+    def _clear_table_cache(self, table_name):
+        return self._get_cache(self.db_name, table_name).clear()
+
+    def _get_from_cache(self, table_name, *args):
+        return self._get_cache(self.db_name, table_name, *args).get()
+
+    def _add_to_cache(self, data, table_name, *args):
+        self._get_cache(self.db_name, table_name, *args).add(data)
+
+    def changes(self, from_version):
+        self._check_settings(self.CHANGES_TABLE_NAME)
+
+        url = self._generate_url('', self.CHANGES_TABLE_NAME, 'start=%s' % from_version, 'json')
+        r = self.http_get(url)
+
+        if r.status_code not in [200]:
+            raise ChangesNotActivatedFlexibeeResponseError(r)
+        return (int(r.json().get('winstrom').get('@globalVersion')),
+                set([change.get('@evidence') for change in r.json().get('winstrom').get('changes')]))
+
+    def activate_changes(self):
+        self._check_settings('changes/enable')
+        url = self._generate_url('', 'changes/enable', '', 'json')
+        self.http_put(url)
+
+
+class ModelConnector(CachedConnector):
+
+    def _get_cache_keys_generator(self, *args):
+        return ModelCacheKeysGenerator(*args)
+
+    def is_request_for_one_object(self, filters):
         return (len(filters) == 1 and isinstance(filters[0], ElementaryFilter) and
                 filters[0].field == 'id' and filters[0].op == '=' and not filters[0].negated)
 
-    def _prepare_obj_data(self, obj_data):
+    def prepare_obj_ids(self, obj_data):
         result = obj_data.copy()
         obj_id = []
+
         pk = obj_data.get('id')
         if pk:
             obj_id.append(pk)
@@ -80,8 +140,9 @@ class ModelConnector(BaseConnector):
 
     def _get_query_string(self, fields, relations, ordering, offset, base):
         query_string_list = [
-            ('detail', 'custom:%s' % ','.join(fields)),
+            ('detail', 'custom:%s' % ','.join(fields))
         ]
+
         if relations:
             query_string_list.append(('relations', ','.join(relations)))
 
@@ -94,63 +155,25 @@ class ModelConnector(BaseConnector):
 
         return '&'.join(['%s=%s' % (key, val) for key, val in query_string_list])
 
-    def _generate_key(self, filters, fields, relations, ordering, offset, base):
-        filters_key = ','.join([unicode(filter) for filter in filters])
-        fields_key = ','.join(fields)
-        relations_key = ','.join(relations)
-        ordering_key = ','.join(ordering)
-        return '__'.join((filters_key, fields_key, relations_key, ordering_key, str(offset), str(base)))
-
-    def _get_from_cache(self, table_name, filters, fields, relations, ordering, offset, base):
-        if '__'.join((self.db_name, table_name)) in self.cache:
-            table_cache = self.cache.get('__'.join((self.db_name, table_name)))
-            key = self._generate_key(filters, fields, relations, ordering, offset, base)
-            if key in table_cache:
-                return table_cache.get(key)
-
-    def _clear_table_cache(self, table_name):
-        if '__'.join((self.db_name, table_name)) in self.cache:
-            del self.cache['__'.join((self.db_name, table_name))]
-
-    def _add_to_cache(self, table_name, filters, fields, relations, ordering, offset, base, data):
-        table_cache = self.cache['__'.join((self.db_name, table_name))] = self.cache\
-                                                                            .get('__'.join((self.db_name, table_name)),
-                                                                                 {})
-        key = self._generate_key(filters, fields, relations, ordering, offset, base)
-        table_cache[key] = data
-
-    def read(self, table_name, filters, fields, relations, ordering, offset, base):
+    def read(self, table_name, filters, fields, relations, ordering, offset, base, store_via_table_name):
         self._check_settings(table_name)
 
-        filters = list(filters)
-        fields = list(fields)
-        relations = list(relations)
-        ordering = list(ordering)
-
-        filters.sort()
-        fields.sort()
-        ordering.sort()
-        relations.sort()
-
-        data = self._get_from_cache(table_name, filters, fields, relations, ordering, offset, base)
+        data = self._get_from_cache(table_name, filters, fields, relations, ordering, offset, base, store_via_table_name)
         if data:
             return data
 
-        extra = self._get_extra_filter(filters)
-
-        url = self.URL % {'hostname': self.hostname, 'db_name': self.db_name, 'table_name': table_name,
-                          'query_string': self._get_query_string(fields, relations, ordering, offset, base),
-                          'extra': extra, 'type': 'json'}
-        self.logger.info('Send GET to %s' % url)
-        r = requests.get(url, auth=(self.username, self.password))
-
+        url = self._generate_url(
+            self._get_extra_filter(filters), table_name,
+            self._get_query_string(fields, relations, ordering, offset, base), 'json'
+        )
+        r = self.http_get(url)
 
         if r.status_code in [200, 201]:
             self.logger.info('Response %s, content: %s' % (r.status_code, force_text(r.text)))
             data = r.json().get('winstrom')
-            self._add_to_cache(table_name, filters, fields, relations, ordering, offset, base, data)
+            self._add_to_cache(data, table_name, filters, fields, relations, ordering, offset, base)
             return data
-        elif self._is_request_for_one_object(filters) and r.status_code == 404:
+        elif self.is_request_for_one_object(filters) and r.status_code == 404:
             return {table_name:[]}
         else:
             self.logger.warning('Response %s, content: %s' % (r.status_code, force_text(r.text)))
@@ -159,19 +182,14 @@ class ModelConnector(BaseConnector):
     def write(self, table_name, data):
         self._check_settings(table_name)
 
-        url = self.URL % {'hostname': self.hostname, 'db_name': self.db_name,
-                          'table_name': table_name, 'query_string': '', 'extra': '', 'type': 'json'}
-
-        data = {'winstrom': {table_name: [self._prepare_obj_data(obj_data) for obj_data in data]}}
-        headers = {'Accept': 'application/json'}
-
-        self.logger.info('Send PUT to %s' % url)
-
-        r = requests.put(url, data=self._serialize(data), headers=headers, auth=(self.username, self.password))
+        url = self._generate_url('', table_name, '', 'json')
+        r = self.http_put(
+            url, {'winstrom': {table_name: [self.prepare_obj_ids(obj_data) for obj_data in data]}},
+            self.JSON_HEADER
+        )
 
         if r.status_code in [200, 201]:
             self._clear_table_cache(table_name)
-            self.logger.info('Response %s, content: %s' % (r.status_code, force_text(r.text)))
             return r.json().get('winstrom')
         else:
             self.logger.warning('Response %s, content: %s' % (r.status_code, force_text(r.text)))
@@ -180,12 +198,7 @@ class ModelConnector(BaseConnector):
     def delete(self, table_name, filters):
         self._check_settings(table_name)
 
-        filters = list(filters)
-        url = self.URL % {
-            'hostname': self.hostname, 'db_name': self.db_name,
-            'table_name': table_name, 'query_string': '',
-            'extra': '', 'type': 'json'
-        }
+        url = self._generate_url('', table_name, '', 'json')
         data = {
             'winstrom': {
                 table_name: {
@@ -194,48 +207,23 @@ class ModelConnector(BaseConnector):
                 }
             }
         }
-        headers = {'Accept': 'application/json'}
-
-        r = requests.put(url, data=self._serialize(data), headers=headers, auth=(self.username, self.password))
-        if r.status_code not in [201]:
-            self.logger.info('Response %s, content: %s' % (r.status_code, force_text(r.text)))
-            raise FlexibeeDatabaseException(r, url, 'Rest DELETE method error')
-        else:
+        r = self.http_put(url, data, self.JSON_HEADER)
+        if r.status_code in [201]:
             self._clear_table_cache(table_name)
             self.logger.info('Response %s, content: %s' % (r.status_code, force_text(r.text)))
             return r.json().get('winstrom')
+        else:
+            raise FlexibeeDatabaseException(r, url, 'Rest DELETE method error')
 
     def get_response(self, table_name, id, type):
         self._check_settings(table_name)
-
-        url = self.URL % {'hostname': self.hostname, 'db_name': self.db_name,
-                          'table_name': table_name, 'query_string': '', 'extra': '/%s' % id, 'type': type}
-        return requests.get(url, auth=(self.username, self.password))
-
-    def changes(self, start):
-        self._check_settings('changes')
-
-        url = self.URL % {'hostname': self.hostname, 'db_name': self.db_name, 'extra': '',
-                          'table_name': 'changes', 'query_string': 'start=%s' % start, 'type': 'json'}
-        r = requests.get(url, auth=(self.username, self.password))
-        if r.status_code not in [200, 404]:
-            self.logger.info('Response %s, content: %s' % (r.status_code, force_text(r.text)))
-            raise ChangesNotActivatedFlexibeeResponseError(r)
-        return int(r.json().get('winstrom').get('@globalVersion'))
-
-    def activate_changes(self):
-        self._check_settings('changes')
-
-        url = self.URL % {'hostname': self.hostname, 'db_name': self.db_name, 'extra': '',
-                          'table_name': 'changes/enable', 'query_string': '', 'type': 'json'}
-        r = requests.put(url, auth=(self.username, self.password))
-
-    def reset(self):
-        super(ModelConnector, self).reset()
-        self.cache = {}
+        return self.http_get(self._generate_url('/%s' % id, table_name, '', 'json'))
 
 
-class AttachmentConnector(BaseConnector):
+class AttachmentConnector(CachedConnector):
+
+    def _get_cache_keys_generator(self, *args):
+        return ItemCacheKeysGenerator('priloha', *args)
 
     def read(self, table_name, parent_id, pk=None):
         self._check_settings(table_name)
@@ -244,19 +232,26 @@ class AttachmentConnector(BaseConnector):
         if pk:
             extra = '/'.join((extra, str(pk)))
 
-        url = self.URL % {'hostname': self.hostname, 'db_name': self.db_name,
-                          'table_name': table_name,
-                          'query_string': 'detail=custom:id,contentType,nazSoub,contentType,poznam,link',
-                          'extra': extra, 'type': 'json'}
-        r = requests.get(url, auth=(self.username, self.password))
-        return r.json().get('winstrom').get('priloha')
+        data = self._get_from_cache(table_name, extra)
+        if data:
+            return data
+
+        url = self._generate_url(
+            extra, table_name, 'detail=custom:id,contentType,nazSoub,contentType,poznam,link', 'json'
+        )
+        r = self.http_get(url)
+        data = r.json().get('winstrom').get('priloha')
+        self._add_to_cache(data, table_name, extra)
+        return data
 
     def _get_last_pk(self, table_name, parent_id):
-        url = 'https://%(hostname)s/c/%(db_name)s/%(table_name)s/%(parent_id)s/prilohy.json%(extra)s'
-        url = url % {'hostname': self.hostname, 'db_name': self.db_name,
-                     'table_name': table_name, 'parent_id': parent_id,
-                     'extra': '?order=id@D&detail=custom:id'}
-        r = requests.get(url, auth=(self.username, self.password))
+        url = 'https://%(hostname)s/c/%(db_name)s/%(table_name)s/%(parent_id)s/prilohy.json%(extra)s' % {
+            'hostname': self.hostname, 'db_name': self.db_name,
+            'table_name': table_name, 'parent_id': parent_id,
+            'extra': '?order=id@D&detail=custom:id'
+        }
+        r = self.http_get(url)
+
         if r.status_code != 200:
             self.logger.warning('Response %s, content: %s' % (r.status_code, force_text(r.text)))
             raise FlexibeeDatabaseException(r, url, 'Rest PUT method error')
@@ -264,49 +259,57 @@ class AttachmentConnector(BaseConnector):
 
     def write(self, table_name, parent_id, data):
         self._check_settings(table_name)
+
         pk = data.pop('pk', None)
         if not pk:
-            url = 'https://%(hostname)s/c/%(db_name)s/%(table_name)s/%(parent_id)s/prilohy/new/%(filename)s'
-            url = url % {'hostname': self.hostname, 'db_name': self.db_name,
-                         'table_name': table_name, 'parent_id': parent_id, 'filename': data.get('nazSoub')}
+            url = 'https://%(hostname)s/c/%(db_name)s/%(table_name)s/%(parent_id)s/prilohy/new/%(filename)s' % {
+                'hostname': self.hostname, 'db_name': self.db_name,
+                'table_name': table_name, 'parent_id': parent_id, 'filename': data.get('nazSoub')
+            }
             headers = {'content-type': data.get('contentType')}
-            r = requests.put(url, data=data['file'].read(), headers=headers,
-                             auth=(self.username, self.password))
+            r = self.http_put(url, headers, data)
         else:
-            url = 'https://%(hostname)s/c/%(db_name)s/%(table_name)s/%(parent_id)s/prilohy/%(pk)s.json'
-            url = url % {'hostname': self.hostname, 'db_name': self.db_name,
-                         'table_name': table_name, 'parent_id': parent_id, 'pk': pk}
-            data = {'winstrom': {'priloha': data}}
-            headers = {'Accept': 'application/json'}
-            r = requests.put(url, data=self._serialize(data), headers=headers, auth=(self.username, self.password))
+            url = 'https://%(hostname)s/c/%(db_name)s/%(table_name)s/%(parent_id)s/prilohy/%(pk)s.json' % {
+                'hostname': self.hostname, 'db_name': self.db_name,
+                'table_name': table_name, 'parent_id': parent_id, 'pk': pk
+            }
+            r = self.http_put(url, {'winstrom': {'priloha': data}}, self.JSON_HEADER)
         if r.status_code not in [200, 201]:
             self.logger.warning('Response %s, content: %s' % (r.status_code, force_text(r.text)))
             raise FlexibeeDatabaseException(r, url, 'Rest PUT method error')
 
+        self._clear_table_cache(table_name)
         return pk or self._get_last_pk(table_name, parent_id)
 
     def delete(self, table_name, parent_id, pk):
         self._check_settings(table_name)
 
-        url = 'https://%(hostname)s/c/%(db_name)s/%(table_name)s/%(parent_id)s/prilohy/%(pk)s.json'
-        self._check_settings(table_name)
-        url = url % {'hostname': self.hostname, 'db_name': self.db_name,
-                     'table_name': table_name, 'parent_id': parent_id, 'pk': pk}
-        r = requests.delete(url, auth=(self.username, self.password))
+        url = 'https://%(hostname)s/c/%(db_name)s/%(table_name)s/%(parent_id)s/prilohy/%(pk)s.json' % {
+            'hostname': self.hostname, 'db_name': self.db_name, 'table_name': table_name, 'parent_id': parent_id,
+            'pk': pk
+        }
+
+        r = self.http_delete(url)
+
         if r.status_code not in [200, 201]:
             self.logger.warning('Response %s, content: %s' % (r.status_code, force_text(r.text)))
             raise FlexibeeDatabaseException(r, url, 'Rest DELETE method error')
+        self._clear_table_cache(table_name)
 
     def get_response(self, table_name, parent_id, pk):
         self._check_settings(table_name)
 
-        url = 'https://%(hostname)s/c/%(db_name)s/%(table_name)s/%(parent_id)s/prilohy/%(pk)s/content'
-        url = url % {'hostname': self.hostname, 'db_name': self.db_name,
-                     'table_name': table_name, 'parent_id': parent_id, 'pk': pk}
-        return requests.get(url, auth=(self.username, self.password))
+        url = 'https://%(hostname)s/c/%(db_name)s/%(table_name)s/%(parent_id)s/prilohy/%(pk)s/content' % {
+            'hostname': self.hostname, 'db_name': self.db_name, 'table_name': table_name, 'parent_id': parent_id,
+            'pk': pk
+        }
+        return self.http_get(url)
 
 
-class RelationConnector(BaseConnector):
+class RelationConnector(CachedConnector):
+
+    def _get_cache_keys_generator(self, *args):
+        return ItemCacheKeysGenerator('vazba', *args)
 
     def read(self, table_name, id, relation_id=None):
         self._check_settings(table_name)
@@ -315,49 +318,42 @@ class RelationConnector(BaseConnector):
         if relation_id:
             extra = '/'.join((extra, str(relation_id)))
 
-        url = self.URL % {'hostname': self.hostname, 'db_name': self.db_name,
-                          'table_name': table_name,
-                          'query_string': 'detail=custom:id,a,b,typVazbyK,castka,castkaMen',
-                          'extra': extra, 'type': 'json'}
+        data = self._get_from_cache(table_name, extra)
+        if data:
+            return data
 
-        r = requests.get(url, auth=(self.username, self.password))
+        url = self._generate_url(extra, table_name, 'detail=custom:id,a,b,typVazbyK,castka,castkaMen', 'json')
+        r = self.http_get(url)
 
-        return r.json().get('winstrom').get('vazba')
+        data = r.json().get('winstrom').get('vazba')
+        self._add_to_cache(data, table_name, extra)
+        return data
 
     def delete(self, table_name, id, data):
         self._check_settings(table_name)
 
-        url = 'https://%(hostname)s/c/%(db_name)s/%(table_name)s/%(id)s.json'
-        self._check_settings(table_name)
-        url = url % {'hostname': self.hostname, 'db_name': self.db_name,
-                     'table_name': table_name, 'id': id}
+        url = 'https://%(hostname)s/c/%(db_name)s/%(table_name)s/%(id)s.json' % {
+            'hostname': self.hostname, 'db_name': self.db_name, 'table_name': table_name, 'id': id
+        }
 
-        data = {'winstrom': {table_name: {'odparovani': data}}}
-        r = requests.put(url, data=self._serialize(data), auth=(self.username, self.password))
+        r = self.http_put(url, {'winstrom': {table_name: {'odparovani': data}}})
         if r.status_code not in [200, 201]:
             self.logger.warning('Response %s, content: %s' % (r.status_code, force_text(r.text)))
             raise FlexibeeDatabaseException(r, url, 'Rest PUT method error')
+        self._clear_table_cache(table_name)
 
     def write(self, table_name, id, data):
         self._check_settings(table_name)
 
-        url = 'https://%(hostname)s/c/%(db_name)s/%(table_name)s/%(id)s.json'
-        self._check_settings(table_name)
-        url = url % {'hostname': self.hostname, 'db_name': self.db_name,
-                     'table_name': table_name, 'id': id}
+        url = 'https://%(hostname)s/c/%(db_name)s/%(table_name)s/%(id)s.json' % {
+            'hostname': self.hostname, 'db_name': self.db_name, 'table_name': table_name, 'id': id
+        }
 
-        data = {'winstrom': {table_name: {'sparovani': data}}}
-        r = requests.put(url, data=self._serialize(data), auth=(self.username, self.password))
+        r = self.http_put(url, {'winstrom': {table_name: {'sparovani': data}}})
         if r.status_code not in [200, 201]:
             self.logger.warning('Response %s, content: %s' % (r.status_code, force_text(r.text)))
             raise FlexibeeDatabaseException(r, url, 'Rest PUT method error')
-
-
-class CachedEntity(object):
-
-    def __init__(self, entity, fields):
-        self.entity = entity
-        self.fields = fields
+        self._clear_table_cache(table_name)
 
 
 # TODO Refactorization encessary
@@ -381,15 +377,16 @@ class RestQuery(object):
         fields = list(self.fields)
         fields += extra_fields
         return self.connector.read(self.table_name, self.filters, fields, self.relations, self.order_fields, offset,
-                                   base)
+                                   base, self.via_table_name)
 
     @property
     def db_name(self):
         return self.connector.db_name
 
     def count(self):
-        data = self.connector.read(self.table_name, self.filters, ['id'], self.relations, self.order_fields, 0, 0)
-        if self.connector._is_request_for_one_object(self.filters):
+        data = self.connector.read(self.table_name, self.filters, ['id'], self.relations, self.order_fields, 0, 0,
+                                   self.via_table_name)
+        if self.connector.is_request_for_one_object(self.filters):
             return len(data.get(self.table_name))
         return int(data.get('@rowCount'))
 
@@ -422,7 +419,7 @@ class RestQuery(object):
         store_view_db_query.add_filter(ElementaryFilter('id', '=', data.get(self.via_fk_name), False))
 
         via_data = {'id': str(data.get(self.via_fk_name))}
-        via_data[self.via_relation_name] = [self.connector._prepare_obj_data(data)]
+        via_data[self.via_relation_name] = [self.connector.prepare_obj_ids(data)]
 
         store_view_db_query.update(via_data)
         store_view_db_query.connector._clear_table_cache(self.table_name)
@@ -472,7 +469,7 @@ class RestQuery(object):
     def update(self, data):
         updated_data = data
         data = []
-        if not self.connector._is_request_for_one_object(self.filters):
+        if not self.connector.is_request_for_one_object(self.filters):
             for entity in self.get().get(self.table_name):
                 entity_value = updated_data.copy()
                 entity_value['id'] = entity.get('id')

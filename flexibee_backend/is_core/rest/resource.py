@@ -4,11 +4,11 @@ from django.http.response import Http404
 from piston.resource import BaseObjectResource
 
 from is_core.rest.resource import RestResource
+from is_core.site import get_model_core
 
 from flexibee_backend.models import Attachment, FlexibeeItem
 from flexibee_backend.is_core.forms import FlexibeeAttachmentForm
 from flexibee_backend.models import Relation
-from is_core.site import get_model_core
 
 
 # TODO: permissions, save, delete, update
