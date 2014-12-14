@@ -13,7 +13,7 @@ from django.core.exceptions import ImproperlyConfigured
 
 from bs4 import BeautifulSoup
 
-from flexibee_backend.db.backends.rest.exceptions import SyncException
+from flexibee_backend.db.backends.rest.exceptions import FlexibeeResponseError
 from flexibee_backend import config
 from flexibee_backend.db.backends.rest.compiler import SQLDataCompiler
 from flexibee_backend.db.backends.rest.connection import decimal_default
@@ -79,7 +79,7 @@ class FlexibeeAdminConnector(object):
             if r.status_code == 201:
                 company.flexibee_db_name = r.headers['location'].split('/')[-1]
             else:
-                raise SyncException(r, url, r.json().get('winstrom').get('message'))
+                raise FlexibeeResponseError(url, r, 'Company creation error')
 
     def update_company(self, company):
         if not self.testing:
@@ -93,7 +93,7 @@ class FlexibeeAdminConnector(object):
             self.logger.info('Send PUT to %s' % url)
             r = requests.put(url, data=json.dumps(data, default=decimal_default), headers=headers, auth=(self.username, self.password))
             if r.status_code != 201:
-                raise SyncException(r, url, r.json().get('winstrom').get('message'))
+                raise FlexibeeResponseError(url, r, 'Company synchronization error')
 
     def delete_company(self, company):
         if not config.FLEXIBEE_ADMIN_CERTIFICATE:
@@ -109,13 +109,13 @@ class FlexibeeAdminConnector(object):
         r = sslrequests.put(url, data=batch, cert=config.FLEXIBEE_ADMIN_CERTIFICATE)
         soup = BeautifulSoup(r.content)
         if r.status_code != 200 or not soup.status or soup.status.string == 'FAILED':
-            raise SyncException(r, url)
+            raise FlexibeeResponseError(url, r, 'Company deletion error')
 
     def backup_company(self, company, file_handler):
         url = self.BACKUP_URL % {'hostname': self.hostname, 'db_name': company.flexibee_db_name}
         r = requests.get(url, auth=(self.username, self.password))
         if r.status_code != 200:
-            raise SyncException(r, url, msg='Failed Backup')
+            raise FlexibeeResponseError(url, r, 'Company backup error')
 
         size = 0
         for chunk in r.iter_content(chunk_size=1024):
@@ -129,7 +129,7 @@ class FlexibeeAdminConnector(object):
         url = self.RESTORE_URL % {'hostname': self.hostname, 'db_name': company.flexibee_db_name}
         r = requests.put(url, data=backup_file, auth=(self.username, self.password))
         if r.status_code != 200:
-            raise SyncException(r, url, msg='Failed Backup')
+            raise FlexibeeResponseError(url, r, 'Company restore error')
 
     def exists_company(self, company):
         url = self.COMPANY_URL % {'hostname': self.hostname, 'db_name': company.flexibee_db_name}

@@ -11,7 +11,7 @@ from django.core.exceptions import ObjectDoesNotExist
 
 from djangotoolbox.db.basecompiler import (NonrelQuery, NonrelCompiler,
                                            NonrelInsertCompiler, NonrelUpdateCompiler,
-                                           NonrelDeleteCompiler, EmptyResultSet, get_selected_fields)
+                                           NonrelDeleteCompiler, EmptyResultSet)
 
 from dateutil.parser import parse
 

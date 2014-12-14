@@ -1,12 +1,9 @@
 import hashlib
-
-from datetime import timedelta
+import sys
 
 from django.core.cache import cache
-from django.utils import timezone
 
 from flexibee_backend.db.backends.rest.exceptions import ChangesNotActivatedFlexibeeResponseError
-
 
 
 class FlexibeeCachedDataWrapper(object):
@@ -14,20 +11,6 @@ class FlexibeeCachedDataWrapper(object):
     def __init__(self, data, version):
         self.data = data
         self.version = version
-
-
-class FlexibeeDBVersionWrapper(object):
-
-    def __init__(self, version=1, valid=True):
-        self.timestamp = timezone.now()
-        self.version = version
-        self.valid = valid
-
-    def invalidate(self):
-        self.valid = False
-
-    def is_valid(self):
-        return self.valid and timezone.now() - timedelta(seconds=180) < self.timestamp
 
 
 class CacheKeysGenerator(object):
@@ -59,7 +42,7 @@ class CacheKeysGenerator(object):
 class ModelCacheKeysGenerator(CacheKeysGenerator):
 
     def __init__(self, db_name, table_name, filters=None, fields=None, relations=None, ordering=None, offset=0, base=0,
-                 store_via_table_name=None):
+                 store_via_table_name=None, type='data'):
         super(ModelCacheKeysGenerator, self).__init__(db_name, table_name)
         self.filters = self._unicode_and_sort(filters)
         self.fields = self._unicode_and_sort(fields)
@@ -68,6 +51,7 @@ class ModelCacheKeysGenerator(CacheKeysGenerator):
         self.offset = unicode(offset)
         self.base = unicode(base)
         self.store_via_table_name = store_via_table_name
+        self.type = type
 
     def _unicode_and_sort(self, values, sort=True):
         values = map(unicode, values or [])
@@ -79,6 +63,7 @@ class ModelCacheKeysGenerator(CacheKeysGenerator):
         key_parts = (
             self.db_name,
             self.table_name,
+            self.type,
             self.offset,
             self.base,
             '(%s)' % '|'.join(self.filters),
@@ -103,7 +88,7 @@ class ItemCacheKeysGenerator(CacheKeysGenerator):
         key_parts = (
             self.db_name,
             self.table_name,
-            self.extra
+            self.extra,
         )
         return self._hash('flexibee_response_%s_%s' % (self.name, '-'.join(key_parts)))
 
@@ -113,9 +98,11 @@ class ItemCacheKeysGenerator(CacheKeysGenerator):
 
 class ResponseCache(object):
 
-    def __init__(self, rest_connector, key_generator):
+    # Static variable
+    __versions = {}
+
+    def __init__(self, rest_connector):
         self.rest_connector = rest_connector
-        self.key_generator = key_generator
 
     def _load_version_from_flexibee(self, version_id):
         try:
@@ -124,42 +111,51 @@ class ResponseCache(object):
             self.rest_connector.activate_changes()
             return 1
 
-    def get_current_db_version(self):
-        return cache.get(self.key_generator.version_key()) or FlexibeeDBVersionWrapper()
+    def _get_current_db_version(self, key_generator):
+        db_version_num = self.__versions.get(key_generator.version_key())
+        if not db_version_num:
+            db_version_num, _ = self.rest_connector.changes(sys.maxint)
+            self.__versions[key_generator.version_key()] = db_version_num
+        return db_version_num
 
-    def get_changes(self, version_from, db_version):
-        if not db_version.is_valid():
-            changes = cache.get(self.key_generator.version_changes_key(version_from, db_version.version))
-            if changes is not None:
-                return db_version.version, changes
+    def _get_changes(self, version_from, db_version, key_generator):
+        changes = cache.get(key_generator.version_changes_key(version_from, db_version))
+        if changes is not None:
+            return db_version, changes
 
         db_version_num, changes = self.rest_connector.changes(version_from)
-        cache.set(self.key_generator.version_key(), FlexibeeDBVersionWrapper(version=db_version_num))
-        cache.set(self.key_generator.version_changes_key(version_from, db_version_num), changes, 180)
+        self.__versions[key_generator.version_key()] = db_version_num
+        cache.set(key_generator.version_changes_key(version_from, db_version_num), changes, 180)
         return db_version_num, changes
 
-    def is_changed(self, cached_data):
-        db_version = self.get_current_db_version()
-        if cached_data.version != db_version.version or not db_version.is_valid():
-            db_version_num, changes = self.get_changes(cached_data.version, db_version)
-            if self.key_generator.get_change_name() not in changes:
+    def _is_changed(self, cached_data, key_generator):
+        db_version = self._get_current_db_version(key_generator)
+        if cached_data.version != db_version:
+            db_version_num, changes = self._get_changes(cached_data.version, db_version, key_generator)
+            self.__versions[key_generator.version_key()] = db_version_num
+            if key_generator.get_change_name() not in changes:
                 cached_data.version = db_version_num
-                cache.set(self.key_generator.response_key(), cached_data)
+                cache.set(key_generator.response_key(), cached_data)
                 return False
             else:
                 return True
         return False
 
-    def clear(self):
-        db_version = self.get_current_db_version()
-        db_version.invalidate()
-        cache.set(self.key_generator.version_key(), db_version)
+    def clear(self, key_generator):
+        self.__versions.pop(key_generator.version_key(), None)
 
-    def get(self):
-        cached_data = cache.get(self.key_generator.response_key())
-        if cached_data and not self.is_changed(cached_data):
+    def reset(self):
+        ResponseCache.__versions = {}
+
+    def get(self, key_generator):
+        cached_data = cache.get(key_generator.response_key())
+        if cached_data and not self._is_changed(cached_data, key_generator):
             return cached_data.data
 
-    def add(self, data):
-        cache.set(self.key_generator.response_key(), FlexibeeCachedDataWrapper(data,
-                                                                               self.get_current_db_version().version))
+    def add(self, data, key_generator):
+        cache.set(key_generator.response_key(),
+            FlexibeeCachedDataWrapper(
+                data, self._get_current_db_version(key_generator)
+            )
+        )
+        return data

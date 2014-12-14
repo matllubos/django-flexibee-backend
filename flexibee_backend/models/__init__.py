@@ -11,9 +11,9 @@ from django.core.files.uploadedfile import InMemoryUploadedFile
 
 from flexibee_backend.db.backends.rest.utils import db_name_validator
 from flexibee_backend.db.backends.rest.admin_connection import admin_connector
-from flexibee_backend.db.backends.rest.exceptions import SyncException
 from flexibee_backend.db.backends.rest.connection import AttachmentConnector, RelationConnector
 from flexibee_backend.models.utils import get_model_by_db_table, lazy_obj_loader
+from flexibee_backend.db.backends.rest.exceptions import FlexibeeResponseError
 
 
 class FlexibeeItem(object):
@@ -94,7 +94,7 @@ class FlexibeeItem(object):
         try:
             update_via = self._update_via()
             self.connector.delete(update_via._meta.db_table, update_via.pk, self.pk)
-        except FlexibeeDatabaseException as ex:
+        except FlexibeeResponseError as ex:
             raise ValidationError(ex.errors)
 
     def _save(self):
@@ -104,7 +104,7 @@ class FlexibeeItem(object):
         try:
             update_via = self._update_via()
             self.pk = self.connector.write(update_via._meta.db_table, update_via.pk, self._encode())
-        except FlexibeeDatabaseException as ex:
+        except FlexibeeResponseError as ex:
             raise ValidationError(ex.errors)
 
     def __str__(self):
@@ -169,7 +169,7 @@ class RelationManager(ItemsManager):
 
     def delete(self):
         if not self.instance.pk:
-            raise FlexibeeDatabaseException(msg='You cannot Delete items of not saved instance')
+            raise FlexibeeDatabaseError('You cannot Delete items of not saved instance')
 
         if self.instance._meta.db_table in ['pokladni-pohyb', 'banka']:
             self.connector.delete(self.instance._meta.db_table, self.instance.pk, [])
@@ -259,7 +259,7 @@ class Relation(FlexibeeItem):
                 raise ValidationError(_('Relation without payment cannot be deleted.'))
 
             self.connector.delete(update_via._meta.db_table, update_via.pk, self._encode())
-        except FlexibeeDatabaseException as ex:
+        except FlexibeeResponseError as ex:
             raise ValidationError(ex.errors)
 
     def _update_via(self):

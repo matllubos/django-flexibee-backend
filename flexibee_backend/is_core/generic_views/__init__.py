@@ -2,9 +2,7 @@ from django.core.urlresolvers import reverse
 from django.utils.encoding import force_text
 
 from is_core.generic_views.mixins import TabsViewMixin
-from is_core.exceptions import SaveObjectException
 
-from flexibee_backend.db.backends.rest.exceptions import FlexibeeDatabaseException
 from flexibee_backend.db.utils import set_db_name
 from flexibee_backend.is_core.generic_views.inlines.inline_form_views import *
 from flexibee_backend.is_core.filters import *

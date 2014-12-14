@@ -2,9 +2,9 @@ from django.utils.translation import ugettext_lazy as _
 from django.forms.formsets import formset_factory
 
 from is_core.generic_views.inlines.inline_form_views import StackedInlineFormView, TabularInlineFormView
-from is_core.exceptions import SaveObjectException
+from is_core.exceptions import PersistenceException
 
-from flexibee_backend.db.backends.rest.exceptions import FlexibeeDatabaseException
+from flexibee_backend.db.backends.rest.exceptions import FlexibeeResponseError
 from flexibee_backend.is_core.forms import FlexibeeAttachmentForm
 from flexibee_backend.is_core.forms.formsets import ItemBaseFormSet
 
@@ -15,8 +15,8 @@ class FlexibeeInlineFormView(object):
         self.pre_save_obj(obj, change)
         try:
             obj.save()
-        except FlexibeeDatabaseException as ex:
-            raise SaveObjectException(ex.errors)
+        except FlexibeeResponseError as ex:
+            raise PersistenceException(ex.errors)
         self.post_save_obj(obj, change)
 
 

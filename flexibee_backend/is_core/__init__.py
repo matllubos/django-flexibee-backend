@@ -12,7 +12,7 @@ from is_core.generic_views.table_views import TableView
 from is_core.rest.resource import RestModelResource
 from is_core.patterns import RestPattern, DoubleRestPattern
 from is_core.generic_views.form_views import AddModelFormView, EditModelFormView
-from is_core.exceptions import SaveObjectException
+from is_core.exceptions import PersistenceException
 from is_core.actions import WebAction
 from is_core.utils import get_new_class_name
 from is_core.rest.factory import modelrest_factory
@@ -20,7 +20,7 @@ from is_core.rest.factory import modelrest_factory
 from flexibee_backend.is_core.patterns import (FlexibeeRestPattern, FlexibeeUIPattern, FlexibeePattern,
                                                AttachmentsFlexibeeUIPattern)
 from flexibee_backend import config
-from flexibee_backend.db.backends.rest.exceptions import FlexibeeDatabaseException
+from flexibee_backend.db.backends.rest.exceptions import FlexibeeResponseError
 from flexibee_backend.is_core.views import AttachmentFileView
 from flexibee_backend.is_core.rest.resource import AttachmentItemResource, RelationItemResource
 from flexibee_backend.models import Attachment
@@ -43,8 +43,15 @@ class FlexibeeIsCore(UIRestModelISCore):
     def save_model(self, request, obj, form, change):
         try:
             obj.save()
-        except FlexibeeDatabaseException as ex:
-            raise SaveObjectException(ex.errors)
+        except FlexibeeResponseError as ex:
+            raise PersistenceException(ex.errors)
+
+    def delete_model(self, request, obj):
+        try:
+            obj.delete()
+        except FlexibeeResponseError as ex:
+            raise PersistenceException(ex.errors)
+
 
     def get_show_in_menu(self, request):
         return self.get_companies(request).exists()

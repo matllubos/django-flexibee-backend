@@ -11,7 +11,6 @@ from flexibee_backend.is_core.forms import FlexibeeAttachmentForm
 from flexibee_backend.models import Relation
 
 
-# TODO: permissions, save, delete, update
 class FlexibeeItemResource(RestResource, BaseObjectResource):
     field_name = None
     form_class = None

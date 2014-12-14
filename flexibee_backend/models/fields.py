@@ -13,7 +13,7 @@ from django.core import exceptions
 
 from flexibee_backend.db.utils import get_connector, get_db_name, set_db_name
 from flexibee_backend.db.backends.rest.connection import ModelConnector
-from flexibee_backend.db.backends.rest.exceptions import FlexibeeDatabaseException
+from flexibee_backend.db.backends.rest.exceptions import FlexibeeDatabaseError
 from flexibee_backend import config
 
 from calendar import timegm
@@ -197,7 +197,7 @@ class ItemsManager(object):
 
     def create(self, **kwargs):
         if not self.instance.pk:
-            raise FlexibeeDatabaseException(msg='You cannot create item of not saved instance')
+            raise FlexibeeDatabaseError('You cannot create item of not saved instance')
 
         item = self.add(**kwargs)
         item.save()
@@ -205,13 +205,13 @@ class ItemsManager(object):
 
     def delete(self):
         if not self.instance.pk:
-            raise FlexibeeDatabaseException(msg='You cannot Delete items of not saved instance')
+            raise FlexibeeDatabaseError('You cannot Delete items of not saved instance')
         for item in self.all():
             item.delete()
 
     def add(self, **kwargs):
         if not self.instance.pk:
-            raise FlexibeeDatabaseException(msg='You cannot add item to not saved instance')
+            raise FlexibeeDatabaseError('You cannot add item to not saved instance')
 
         return self.item_class(self.instance, self.connector, **kwargs)
 
