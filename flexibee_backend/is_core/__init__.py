@@ -2,7 +2,6 @@ from django.db.models.loading import get_model
 from django.utils.datastructures import SortedDict
 from django.db.transaction import get_connection
 from django.core.urlresolvers import reverse
-from django.shortcuts import get_object_or_404
 from django.db.utils import DatabaseError
 from django.http.response import Http404
 
@@ -16,6 +15,8 @@ from is_core.exceptions import PersistenceException
 from is_core.actions import WebAction
 from is_core.utils import get_new_class_name
 from is_core.rest.factory import modelrest_factory
+
+from piston.utils import get_object_or_404
 
 from flexibee_backend.is_core.patterns import (FlexibeeRestPattern, FlexibeeUIPattern, FlexibeePattern,
                                                AttachmentsFlexibeeUIPattern)
@@ -51,7 +52,6 @@ class FlexibeeIsCore(UIRestModelISCore):
             obj.delete()
         except FlexibeeResponseError as ex:
             raise PersistenceException(ex.errors)
-
 
     def get_show_in_menu(self, request):
         return self.get_companies(request).exists()
