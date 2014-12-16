@@ -1,3 +1,5 @@
+from __future__ import unicode_literals
+
 import hashlib
 import sys
 
@@ -29,7 +31,7 @@ class CacheKeysGenerator(object):
         return self._hash('flexibee_version_%s_%s' % (self.db_name, self.table_name))
 
     def _hash(self, value):
-        hash_object = hashlib.sha1(value)
+        hash_object = hashlib.sha1(value.encode('utf-8'))
         return hash_object.hexdigest()
 
     def response_key(self):
