@@ -22,7 +22,6 @@ def decimal_default(obj):
 
 class BaseConnector(object):
 
-    URL = 'https://%(hostname)s/c/%(db_name)s/%(table_name)s%(extra)s.%(type)s?%(query_string)s'
     JSON_HEADER = {'Accept': 'application/json'}
     logger = logging.getLogger('flexibee-backend')
 
@@ -30,11 +29,6 @@ class BaseConnector(object):
         self.username = username
         self.password = password
         self.hostname = hostname
-        self.db_name = None
-
-    def _check_settings(self, table_name):
-        if self.db_name is None:
-            raise DatabaseError('For flexibee DB connector must be set company: %s' % table_name)
 
     def _serialize(self, data):
         return json.dumps({'winstrom': data}, default=decimal_default)
@@ -56,12 +50,14 @@ class BaseConnector(object):
         self.logger.info('Receiving response %s' % r.status_code)
         return r
 
-    def http_put(self, url, data=None, headers=None):
+    def http_put(self, url, data=None, headers=None, serialize=True):
         self.logger.info('Sending PUT to %s' % url)
         if data is None:
             r = requests.put(url, auth=(self.username, self.password))
         else:
-            r = requests.put(url, data=self._serialize(data), headers=headers, auth=(self.username, self.password))
+            if serialize:
+                data = self._serialize(data)
+            r = requests.put(url, data=data, headers=headers, auth=(self.username, self.password))
         self.logger.info('Receiving response %s' % r.status_code)
         return r
 
@@ -70,6 +66,19 @@ class BaseConnector(object):
         r = requests.delete(url, auth=(self.username, self.password))
         self.logger.info('Receiving response %s' % r.status_code)
         return r
+
+
+class DatabaseBaseConnector(BaseConnector):
+
+    URL = 'https://%(hostname)s/c/%(db_name)s/%(table_name)s%(extra)s.%(type)s?%(query_string)s'
+
+    def __init__(self, *args, **kwargs):
+        super(DatabaseBaseConnector, self).__init__(*args, **kwargs)
+        self.db_name = None
+
+    def _check_settings(self, table_name):
+        if self.db_name is None:
+            raise DatabaseError('For flexibee DB connector must be set company: %s' % table_name)
 
     def _generate_url(self, extra, table_name, query_string, type):
         return self.URL % {
@@ -81,7 +90,7 @@ class BaseConnector(object):
         self.db_name = None
 
 
-class CachedConnector(BaseConnector):
+class CachedConnector(DatabaseBaseConnector):
     CHANGES_TABLE_NAME = 'changes'
 
     def __init__(self, *args, **kwargs):

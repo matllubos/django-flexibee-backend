@@ -315,6 +315,12 @@ class Company(models.Model):
                                         unique=True, validators=[db_name_validator])
     _flexibee_meta = OptionsLazy('_flexibee_meta', FlexibeeOptions)
 
+    def flexibee_create(self):
+        admin_connector.create_company(self)
+
+    def flexibee_update(self):
+        admin_connector.update_company(self)
+
     class Meta:
         abstract = True
 
