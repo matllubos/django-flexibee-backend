@@ -16,7 +16,7 @@ from is_core.actions import WebAction
 from is_core.utils import get_new_class_name
 from is_core.rest.factory import modelrest_factory
 
-from chamber.models.shortcuts import get_object_or_404
+from chamber.shortcuts import get_object_or_404
 
 from flexibee_backend.is_core.patterns import (FlexibeeRestPattern, FlexibeeUIPattern, FlexibeePattern,
                                                AttachmentsFlexibeeUIPattern)

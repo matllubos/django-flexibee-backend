@@ -4,7 +4,7 @@ from django.http.response import Http404
 
 from is_core.generic_views import DefaultCoreViewMixin
 
-from chamber.models.shortcuts import get_object_or_404
+from chamber.shortcuts import get_object_or_404
 
 
 class AttachmentFileView(DefaultCoreViewMixin, View):
