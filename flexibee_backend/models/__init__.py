@@ -353,6 +353,8 @@ class FlexibeeModel(models.Model):
 
     class FlexibeeMeta:
         readonly_fields = []
+        readonly = False
+        view = False
 
     class RestMeta:
         default_general_fields = ('id',)

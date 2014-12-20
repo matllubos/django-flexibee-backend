@@ -112,15 +112,24 @@ class BackendQuery(NonrelQuery):
         return self.db_query.count()
 
     def delete(self):
+        if self.model._flexibee_meta.view or self.model._flexibee_meta.readonly:
+            raise DatabaseError('Delete is not allowed for View and Readonly models')
+
         self.internal_query.delete(self.db_query.delete())
 
     def insert(self, data):
+        if self.model._flexibee_meta.view or self.model._flexibee_meta.readonly:
+            raise DatabaseError('Insert is not allowed for View and Readonly models')
+
         assert len(data) == 1
 
         data, internal_data = self.internal_query.split_data(data[0])
         return self.internal_query.update(internal_data, self.db_query.insert(data))
 
     def update(self, data):
+        if self.model._flexibee_meta.view or self.model._flexibee_meta.readonly:
+            raise DatabaseError('Update is not allowed for View and Readonly models')
+
         data, internal_data = self.internal_query.split_data(data)
         pks = self.db_query.update(data)
         for pk in pks:
@@ -135,20 +144,23 @@ class BackendQuery(NonrelQuery):
 
     def _fields_order_by(self, ordering):
         for field, is_asc in ordering:
-            if not self.internal_query.is_internal(field):
+            if not self.internal_query.is_internal(field) and (not self.model._flexibee_meta.view or not field.primary_key):
                 self.db_query.add_ordering(field.db_column or field.get_attname(), is_asc)
 
     def _natural_order_by(self, is_asc):
-        self.db_query.add_ordering('id', is_asc)
+        if not self.model._flexibee_meta.view:
+            self.db_query.add_ordering('id', is_asc)
 
     def _generate_elementary_filter(self, field, lookup_type, negated, value):
         if self.internal_query.is_internal(field):
             field, lookup_type, negated, value = self.internal_query.convert_filter(field, lookup_type, negated, value)
+        elif self.model._flexibee_meta.view and field.primary_key:
+            raise DatabaseError('View cannot be filtered with primary key')
 
         try:
             op = OPERATORS_MAP[lookup_type]
         except KeyError:
-            raise DatabaseError("Lookup type %r isn't supported" % lookup_type)
+            raise DatabaseError('Lookup type %r isn\'t supported' % lookup_type)
 
         # Handle special-case lookup types
         if callable(op):
