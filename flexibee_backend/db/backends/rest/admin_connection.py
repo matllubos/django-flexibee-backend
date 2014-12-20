@@ -175,6 +175,10 @@ class FlexibeeAdminConnector(BaseConnector):
             raise FlexibeeResponseError(url, r, 'Company restore error')
 
     def exists_company(self, company):
+        return False
+
+        if not company.flexibee_db_name:
+            return False
         url = self.COMPANY_URL % {'hostname': self.hostname, 'db_name': company.flexibee_db_name}
         r = self.http_get(url)
         return r.status_code == 200

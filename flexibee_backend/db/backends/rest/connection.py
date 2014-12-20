@@ -77,7 +77,7 @@ class DatabaseBaseConnector(BaseConnector):
         self.db_name = None
 
     def _check_settings(self, table_name):
-        if self.db_name is None:
+        if not self.db_name:
             raise DatabaseError('For flexibee DB connector must be set company: %s' % table_name)
 
     def _generate_url(self, extra, table_name, query_string, type):

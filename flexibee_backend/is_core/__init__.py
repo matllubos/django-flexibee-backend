@@ -63,7 +63,11 @@ class FlexibeeIsCore(UIRestModelISCore):
         raise NotImplemented
 
     def get_company(self, request):
-        return get_object_or_404(self.get_companies(request), pk=request.kwargs.get('company_pk'))
+        company = (request.kwargs.get('_company') or
+                   get_object_or_404(self.get_companies(request), pk=request.kwargs.get('company_pk')))
+        if not company.exists:
+            raise Http404
+        return company
 
     def get_url_prefix(self):
         return 'company/(?P<company_pk>[-\w]+)/%s' % '/'.join(self.get_menu_groups())
@@ -93,10 +97,14 @@ class ItemIsCore(RestModelISCore):
     rest_resource_pattern_class = FlexibeeRestPattern
 
     def init_request(self, request):
-        get_connection(config.FLEXIBEE_BACKEND_NAME).set_db_name('testovaci_firma_ffp')
+        get_connection(config.FLEXIBEE_BACKEND_NAME).set_db_name(self.get_company(request).flexibee_db_name)
 
     def get_company(self, request):
-        return get_object_or_404(self.get_companies(request), pk=request.kwargs.get('company_pk'))
+        company = (request.kwargs.get('_company') or
+                   get_object_or_404(self.get_companies(request), pk=request.kwargs.get('company_pk')))
+        if not company.exists:
+            raise Http404
+        return company
 
     def get_queryset(self, request, parent_group):
         from is_core.site import get_core

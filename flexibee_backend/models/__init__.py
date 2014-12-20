@@ -1,4 +1,5 @@
 import decimal
+from datetime import timedelta
 
 from .fields import *
 
@@ -9,11 +10,15 @@ from django.utils.functional import SimpleLazyObject
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import InMemoryUploadedFile
 
+from chamber.utils.datastructures import ChoicesNumEnum, ChoicesEnum
+
 from flexibee_backend.db.backends.rest.utils import db_name_validator
 from flexibee_backend.db.backends.rest.admin_connection import admin_connector
 from flexibee_backend.db.backends.rest.connection import AttachmentConnector, RelationConnector
 from flexibee_backend.models.utils import get_model_by_db_table, lazy_obj_loader
 from flexibee_backend.db.backends.rest.exceptions import FlexibeeResponseError
+from flexibee_backend.tasks import synchronize_company
+import time
 
 
 class FlexibeeItem(object):
@@ -311,15 +316,77 @@ class FlexibeeOptions(Options):
 
 class Company(models.Model):
 
-    flexibee_db_name = models.CharField(verbose_name=_('DB name'), null=False, blank=True, max_length=100,
-                                        unique=True, validators=[db_name_validator])
+    FLEXIBEE_STATE = ChoicesNumEnum(
+        ('DETACHED', _('Detached')),
+        ('ATTACHED', _('Attached')),
+    )
+
+    FLEXIBEE_SYNCHRONIZATION_STATE = ChoicesEnum(
+        ('SYNCHRONIZED', _('Synchronized')),
+        ('DETACHED', _('Detached')),
+        ('ERROR', _('Synchronization error')),
+        ('SYNCHRONIZING', _('Synchronizing')),
+    )
+
+    # TODO: should be partly unique
+    flexibee_db_name = models.CharField(verbose_name=_('DB name'), null=True, blank=True, max_length=100,
+                                        validators=[db_name_validator])
+    flexibee_synchronization_start = models.DateTimeField(verbose_name=_('Synchronization start'), null=True, blank=True,
+                                                         editable=False)
+    flexibee_last_synchronization = models.DateTimeField(verbose_name=_('Last synchronization'), null=True, blank=True,
+                                                         editable=False)
+    flexibee_state = models.PositiveIntegerField(
+        verbose_name=_('Flexibee state'), choices=FLEXIBEE_STATE.choices, default=FLEXIBEE_STATE.DETACHED, null=False,
+        blank=False, editable=False
+    )
+
     _flexibee_meta = OptionsLazy('_flexibee_meta', FlexibeeOptions)
+
+    def __init__(self, *args, **kwargs):
+        super(Company, self).__init__(*args, **kwargs)
+        self._exists = None
 
     def flexibee_create(self):
         admin_connector.create_company(self)
 
     def flexibee_update(self):
         admin_connector.update_company(self)
+
+    def save(self, synchronized=False, force_insert=False, force_update=False, using=None,
+             update_fields=None):
+        if synchronized:
+            self.flexibee_synchronization_start = None
+            self.flexibee_last_synchronization = timezone.now()
+            self.flexibee_state = self.FLEXIBEE_STATE.ATTACHED
+        else:
+            self.flexibee_state = self.FLEXIBEE_STATE.DETACHED
+        super(Company, self).save(force_insert, force_update, using, update_fields)
+
+    @property
+    def exists(self):
+        if self._exists is None:
+            self._exists = admin_connector.exists_company(self)
+        return self._exists
+
+    def synchronize(self):
+        self.flexibee_synchronization_start = timezone.now()
+        self.save()
+        synchronize_company.delay(self.pk)
+
+    @property
+    def synchronization_state(self):
+        if self.flexibee_state == self.FLEXIBEE_STATE.ATTACHED:
+            return self.FLEXIBEE_SYNCHRONIZATION_STATE.SYNCHRONIZED
+        elif not self.flexibee_synchronization_start:
+            return self.FLEXIBEE_SYNCHRONIZATION_STATE.DETACHED
+        elif self.flexibee_synchronization_start + timedelta(minutes=500) < timezone.now():
+            return self.FLEXIBEE_SYNCHRONIZATION_STATE.ERROR
+        else:
+            return self.FLEXIBEE_SYNCHRONIZATION_STATE.SYNCHRONIZING
+
+    def synchronization_state_display(self):
+        return self.FLEXIBEE_SYNCHRONIZATION_STATE.get_label(self.synchronization_state)
+    synchronization_state_display.short_description = _('Flexibee state')
 
     class Meta:
         abstract = True
