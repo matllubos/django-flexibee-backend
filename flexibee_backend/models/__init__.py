@@ -1,4 +1,7 @@
+from __future__ import unicode_literals
+
 import decimal
+
 from datetime import timedelta
 
 from .fields import *
@@ -11,6 +14,7 @@ from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import InMemoryUploadedFile
 
 from chamber.utils.datastructures import ChoicesNumEnum, ChoicesEnum
+from chamber.models.fields import CharNullField
 
 from flexibee_backend.db.backends.rest.utils import db_name_validator
 from flexibee_backend.db.backends.rest.admin_connection import admin_connector
@@ -18,6 +22,7 @@ from flexibee_backend.db.backends.rest.connection import AttachmentConnector, Re
 from flexibee_backend.models.utils import get_model_by_db_table, lazy_obj_loader
 from flexibee_backend.db.backends.rest.exceptions import FlexibeeResponseError
 from flexibee_backend.tasks import synchronize_company
+
 import time
 
 
@@ -84,7 +89,6 @@ class FlexibeeItem(object):
     def _update_via(self):
         return self.instance
 
-    # TODO: validation should be better for future
     def validate(self):
         """
         Should contains pre_save validation, this is more for developers than for users,
@@ -328,8 +332,7 @@ class Company(models.Model):
         ('SYNCHRONIZING', _('Synchronizing')),
     )
 
-    # TODO: should be partly unique
-    flexibee_db_name = models.CharField(verbose_name=_('DB name'), null=True, blank=True, max_length=100,
+    flexibee_db_name = CharNullField(verbose_name=_('DB name'), null=True, blank=True, max_length=100, unique=True,
                                         validators=[db_name_validator])
     flexibee_synchronization_start = models.DateTimeField(verbose_name=_('Synchronization start'), null=True, blank=True,
                                                          editable=False)
@@ -339,6 +342,9 @@ class Company(models.Model):
         verbose_name=_('Flexibee state'), choices=FLEXIBEE_STATE.choices, default=FLEXIBEE_STATE.DETACHED, null=False,
         blank=False, editable=False
     )
+    flexibee_backup = BackupFileField(verbose_name=_('Flexibee backup'), null=True, blank=True,
+                                      upload_to='flexibee/backup')
+
 
     _flexibee_meta = OptionsLazy('_flexibee_meta', FlexibeeOptions)
 
@@ -371,7 +377,7 @@ class Company(models.Model):
     def synchronize(self):
         self.flexibee_synchronization_start = timezone.now()
         self.save()
-        synchronize_company.delay(self.pk)
+        synchronize_company.delay(self.pk, backup=getattr(self, '_flexibee_backup', False))
 
     @property
     def synchronization_state(self):
@@ -379,7 +385,7 @@ class Company(models.Model):
             return self.FLEXIBEE_SYNCHRONIZATION_STATE.SYNCHRONIZED
         elif not self.flexibee_synchronization_start:
             return self.FLEXIBEE_SYNCHRONIZATION_STATE.DETACHED
-        elif self.flexibee_synchronization_start + timedelta(minutes=500) < timezone.now():
+        elif self.flexibee_synchronization_start + timedelta(minutes=1) < timezone.now():
             return self.FLEXIBEE_SYNCHRONIZATION_STATE.ERROR
         else:
             return self.FLEXIBEE_SYNCHRONIZATION_STATE.SYNCHRONIZING

@@ -1,3 +1,5 @@
+import os
+
 from django.forms.widgets import ClearableFileInput, Widget
 from django.utils.html import format_html
 from django.utils.encoding import force_text
@@ -34,3 +36,4 @@ class AttachmentWidget(ClearableFileInput):
         template = '%(input)s'
         substitutions['input'] = super(ClearableFileInput, self).render(name, value, attrs)
         return mark_safe(template % substitutions)
+

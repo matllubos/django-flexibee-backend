@@ -54,7 +54,12 @@ class FlexibeeIsCore(UIRestModelISCore):
             raise PersistenceException(ex.errors)
 
     def get_show_in_menu(self, request):
-        return self.get_companies(request).exists()
+        try:
+            company = self.get_company(request)
+            return super(FlexibeeIsCore, self).get_show_in_menu(request)
+        except Http404:
+            return False
+        return self.has_ui_read_permission(request)
 
     def init_request(self, request):
         get_connection(config.FLEXIBEE_BACKEND_NAME).set_db_name(self.get_company(request).flexibee_db_name)
@@ -108,7 +113,6 @@ class ItemIsCore(RestModelISCore):
 
     def get_queryset(self, request, parent_group):
         from is_core.site import get_core
-        # TODO This is not very secure
 
         parent_core = get_core(parent_group)
         if not parent_core:

@@ -111,12 +111,12 @@ class ResponseCache(object):
             return self.rest_connector.changes(version_id)
         except ChangesNotActivatedFlexibeeResponseError:
             self.rest_connector.activate_changes()
-            return 1
+            return self.rest_connector.changes(version_id)
 
     def _get_current_db_version(self, key_generator):
         db_version_num = self.__versions.get(key_generator.version_key())
         if not db_version_num:
-            db_version_num, _ = self.rest_connector.changes(sys.maxint)
+            db_version_num, _ = self._load_version_from_flexibee(sys.maxint)
             self.__versions[key_generator.version_key()] = db_version_num
         return db_version_num
 
@@ -125,7 +125,7 @@ class ResponseCache(object):
         if changes is not None:
             return db_version, changes
 
-        db_version_num, changes = self.rest_connector.changes(version_from)
+        db_version_num, changes = self._load_version_from_flexibee(version_from)
         self.__versions[key_generator.version_key()] = db_version_num
         cache.set(key_generator.version_changes_key(version_from, db_version_num), changes, 180)
         return db_version_num, changes

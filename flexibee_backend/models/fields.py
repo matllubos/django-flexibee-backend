@@ -17,6 +17,9 @@ from flexibee_backend.db.backends.rest.exceptions import FlexibeeDatabaseError
 from flexibee_backend import config
 
 from calendar import timegm
+from chamber.models.fields import FileField
+from flexibee_backend.forms.fields import BackupFormFielField
+from flexibee_backend.forms.widgets import FILE_INPUT_BACKUP
 
 
 class InternalModel(models.Model):
@@ -320,3 +323,17 @@ class CrossDatabaseForeignKey(CrossDatabaseForeignKeyMixin, ForeignKey):
 
 class CrossDatabaseOneToOneField(CrossDatabaseForeignKeyMixin, OneToOneField):
     pass
+
+
+class BackupFileField(FileField):
+
+    def formfield(self, form_class=None, choices_form_class=None, **kwargs):
+        defaults = {'form_class': BackupFormFielField}
+        defaults.update(kwargs)
+        return super(BackupFileField, self).formfield(**defaults)
+
+    def clean(self, value, model_instance):
+        if value == FILE_INPUT_BACKUP:
+            model_instance._flexibee_backup = True
+            return None
+        return super(BackupFileField, self).clean(value, model_instance)

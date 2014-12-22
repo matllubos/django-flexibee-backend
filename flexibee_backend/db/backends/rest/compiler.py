@@ -23,8 +23,6 @@ from flexibee_backend.db.backends.rest.filters import ElementaryFilter, NotFilte
     ContradictionFilter
 
 
-
-# TODO: Change this to match your DB
 # Valid query types (a dictionary is used for speedy lookups).
 OPERATORS_MAP = {
     'exact': '=',

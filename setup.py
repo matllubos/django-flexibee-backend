@@ -31,7 +31,11 @@ setup(
         'django>=1.6',
         'djangotoolbox>=1.6.2',
         'requests>=2.2.1',
-        'beautifulsoup4'
+        'beautifulsoup4',
+        'django-chamber>=0.0.3',
+    ],
+    dependency_links=[
+        'https://github.com/matllubos/django-chamber/tarball/0.0.3#egg=django-chamber-0.0.3',
     ],
     zip_safe=False
 )
