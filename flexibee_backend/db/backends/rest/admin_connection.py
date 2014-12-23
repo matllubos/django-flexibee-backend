@@ -177,6 +177,10 @@ class FlexibeeAdminConnector(BaseConnector):
     def exists_company(self, company):
         if not company.flexibee_db_name:
             return False
+
+        if self.testing:
+            return True
+
         url = self.COMPANY_URL % {'hostname': self.hostname, 'db_name': company.flexibee_db_name}
         r = self.http_get(url)
         return r.status_code == 200

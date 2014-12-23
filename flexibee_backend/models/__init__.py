@@ -385,7 +385,7 @@ class Company(models.Model):
             return self.FLEXIBEE_SYNCHRONIZATION_STATE.SYNCHRONIZED
         elif not self.flexibee_synchronization_start:
             return self.FLEXIBEE_SYNCHRONIZATION_STATE.DETACHED
-        elif self.flexibee_synchronization_start + timedelta(minutes=1) < timezone.now():
+        elif self.flexibee_synchronization_start + timedelta(minutes=10) < timezone.now():
             return self.FLEXIBEE_SYNCHRONIZATION_STATE.ERROR
         else:
             return self.FLEXIBEE_SYNCHRONIZATION_STATE.SYNCHRONIZING
