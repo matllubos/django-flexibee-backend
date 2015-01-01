@@ -8,6 +8,7 @@ from flexibee_backend.db.backends.rest.admin_connection import admin_connector
 
 
 app = Celery()
+app.config_from_object('django.conf:settings')
 
 
 @app.task()
