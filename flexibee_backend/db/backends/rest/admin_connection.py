@@ -38,6 +38,7 @@ class FlexibeeAdminConnector(BaseConnector):
             db_settings.get('USER'), db_settings.get('PASSWORD'), db_settings.get('HOSTNAME')
         )
         self.testing = testing if testing is not None else config.TESTING
+        self._exists_company_cache = {}
 
     def _get_value_internal_type(self, instance, field_name, value):
         try:
@@ -181,8 +182,14 @@ class FlexibeeAdminConnector(BaseConnector):
         if self.testing:
             return True
 
-        url = self.COMPANY_URL % {'hostname': self.hostname, 'db_name': company.flexibee_db_name}
-        r = self.http_get(url)
-        return r.status_code == 200
+        if company.flexibee_db_name not in self._exists_company_cache:
+            url = self.COMPANY_URL % {'hostname': self.hostname, 'db_name': company.flexibee_db_name}
+            r = self.http_get(url)
+            self._exists_company_cache[company.flexibee_db_name] = r.status_code == 200
+
+        return self._exists_company_cache[company.flexibee_db_name]
+
+    def reset(self):
+        self._exists_company_cache = {}
 
 admin_connector = FlexibeeAdminConnector()

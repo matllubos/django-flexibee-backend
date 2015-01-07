@@ -197,7 +197,7 @@ class ModelConnector(CachedConnector):
 
         data = self._get_from_cache(table_name, filters, fields, relations, ordering, offset, base,
                                     store_via_table_name)
-        if data:
+        if data is not None:
             return data
 
         url = self._generate_url(
@@ -208,7 +208,8 @@ class ModelConnector(CachedConnector):
 
         if r.status_code in [200, 201] :
             return self._add_to_cache(
-                self._deserialize(url, r, table_name), table_name, filters, fields, relations, ordering, offset, base
+                self._deserialize(url, r, table_name), table_name, filters, fields, relations, ordering, offset, base,
+                store_via_table_name
             )
         else:
             raise FlexibeeResponseError(url, r, 'Model connector read method error')
@@ -223,7 +224,7 @@ class ModelConnector(CachedConnector):
 
         data = self._get_from_cache(table_name, filters, fields, relations, ordering, offset, base,
                                     store_via_table_name, 'count')
-        if data:
+        if data is not None:
             return data
 
         url = self._generate_url(
@@ -235,7 +236,7 @@ class ModelConnector(CachedConnector):
         if r.status_code in [200, 201]:
             return self._add_to_cache(
                 int(self._deserialize(url, r, '@rowCount')), table_name, filters, fields, relations, ordering,
-                offset, base, 'count'
+                offset, base, store_via_table_name, 'count'
             )
         else:
             raise FlexibeeResponseError(url, r, 'Model connector count method error')
@@ -290,7 +291,7 @@ class AttachmentConnector(CachedConnector):
             extra = '/'.join((extra, str(pk)))
 
         data = self._get_from_cache(table_name, extra)
-        if data:
+        if data is not None:
             return data
 
         url = self._generate_url(
@@ -387,7 +388,7 @@ class RelationConnector(CachedConnector):
             extra = '/'.join((extra, str(relation_id)))
 
         data = self._get_from_cache(table_name, extra)
-        if data:
+        if data is not None:
             return data
 
         url = self._generate_url(extra, table_name, 'detail=custom:id,a,b,typVazbyK,castka,castkaMen', 'json')

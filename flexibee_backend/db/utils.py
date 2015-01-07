@@ -13,7 +13,10 @@ def get_db_name(backend_name=config.FLEXIBEE_BACKEND_NAME):
 
 
 def reset_connection(backend_name=config.FLEXIBEE_BACKEND_NAME):
+    from flexibee_backend.db.backends.rest.admin_connection import admin_connector
+
     get_connection(backend_name).reset()
+    admin_connector.reset()
 
 
 def str_equal(a, b):
