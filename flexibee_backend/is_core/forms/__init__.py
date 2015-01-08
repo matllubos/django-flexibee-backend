@@ -27,7 +27,7 @@ class FlexibeeItemForm(RestFormMixin, forms.Form):
 
 class FlexibeeAttachmentForm(FlexibeeItemForm):
     """
-    Form for adding attachement to flexibee models
+    Form for adding attachment to flexibee models
     """
 
     file = forms.FileField(label=_('Attachment'), required=True, widget=AttachmentWidget)

@@ -96,7 +96,7 @@ class FlexibeeAttachmentFormViewMixin(FlexibeeItemInlineFormViewMixin):
     form_class = FlexibeeAttachmentForm
 
     def get_name(self):
-        return _('attachement')
+        return _('attachment')
 
     def get_queryset(self):
         return self.parent_instance.attachments.all()
