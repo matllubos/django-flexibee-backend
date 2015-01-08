@@ -6,6 +6,8 @@ import sys
 from django.core.cache import cache
 
 from flexibee_backend.db.backends.rest.exceptions import ChangesNotActivatedFlexibeeResponseError
+from flexibee_backend import config
+
 
 
 class FlexibeeCachedDataWrapper(object):
@@ -158,6 +160,6 @@ class ResponseCache(object):
         cache.set(key_generator.response_key(),
             FlexibeeCachedDataWrapper(
                 data, self._get_current_db_version(key_generator)
-            )
+            ), config.FLEXIBEE_CACHE_TIMEOUT
         )
         return data

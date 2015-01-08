@@ -32,7 +32,7 @@ class FlexibeeResponseError(FlexibeeDatabaseError):
         for result in data.get('results', ()):
             for error in result.get('errors'):
                 if 'message' in error:
-                    errors.append(error.get('message'))
+                    errors.append(error.get('message').split('\n')[0])
         return errors
 
     def __unicode__(self):
