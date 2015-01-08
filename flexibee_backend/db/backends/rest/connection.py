@@ -323,7 +323,7 @@ class AttachmentConnector(CachedConnector):
             'table_name': table_name, 'parent_id': parent_id, 'filename': data.get('nazSoub')
         }
         headers = {'content-type': data.get('contentType')}
-        r = self.http_put(url, data, headers)
+        r = self.http_put(url, data, headers, False)
         if r.status_code not in [200, 201]:
             raise FlexibeeResponseError(url, r, 'Attachment connector write method error')
 
