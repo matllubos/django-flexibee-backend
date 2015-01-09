@@ -21,7 +21,10 @@ class EmptyWidget(Widget):
 class AttachmentWidget(ClearableFileInput):
 
     def attachment_url(self, attachment):
-        return 'attachment/%s__%s' % (attachment.pk, urlquote(attachment.filename))
+        if attachment.link:
+            return attachment.link
+        else:
+            return 'attachment/%s__%s' % (attachment.pk, urlquote(attachment.filename))
 
     def render(self, name, value, attrs=None):
         if value and isinstance(value, Attachment):

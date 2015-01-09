@@ -1,12 +1,12 @@
 from django import forms
 from django.utils.translation import ugettext_lazy as _
 
-from piston.forms import RestFormMixin
+from is_core.forms.forms import SmartForm
 
 from flexibee_backend.is_core.forms.widgets import AttachmentWidget, EmptyWidget
 
 
-class FlexibeeItemForm(RestFormMixin, forms.Form):
+class FlexibeeItemForm(SmartForm):
     """
     Flexibee form for item creation and changes.
     """
@@ -51,6 +51,11 @@ class FlexibeeAttachmentForm(FlexibeeItemForm):
         if self.prefix:
             file_field_name = '%s-%s' % (self.prefix, file_field_name)
         return self.files.get(file_field_name)
+
+    def _get_readonly_widget(self, field_name, field, widget):
+        if field_name != 'file':
+            return super(FlexibeeAttachmentForm, self)._get_readonly_widget(field_name, field, widget)
+        return field.widget
 
     def save(self, commit=True):
         description = self.cleaned_data.get('description')

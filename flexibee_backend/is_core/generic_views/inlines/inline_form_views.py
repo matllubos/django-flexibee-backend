@@ -2,7 +2,8 @@ from django.utils.translation import ugettext_lazy as _
 
 from is_core.generic_views.inlines.inline_form_views import StackedInlineFormView, TabularInlineFormView
 from is_core.exceptions import PersistenceException
-from is_core.forms.models import smartformset_factory
+from is_core.forms.formsets import smartformset_factory
+from is_core.forms.forms import smartform_factory
 
 from flexibee_backend.db.backends.rest.exceptions import FlexibeeResponseError
 from flexibee_backend.is_core.forms import FlexibeeAttachmentForm
@@ -39,7 +40,13 @@ class FlexibeeItemInlineFormViewMixin(object):
         Rewrited because there is different formset factory
         """
         extra = self.get_extra()
-        Formset = smartformset_factory(self.form_class, formset=ItemBaseFormSet, extra=extra, min_num=self.min_num,
+        readonly_fields = self.get_readonly_fields()
+        exclude = self.get_exclude()
+
+        form_class = smartform_factory(self.request, self.form_class, readonly_fields=readonly_fields, exclude=exclude,
+                                       formreadonlyfield_callback=self.formfield_for_readonlyfield,
+                                       readonly=self.readonly)
+        Formset = smartformset_factory(form_class, formset=ItemBaseFormSet, extra=extra, min_num=self.min_num,
                                        max_num=self.max_num)
         if data:
             formset = Formset(instance, self.get_queryset(), data=data, files=files,

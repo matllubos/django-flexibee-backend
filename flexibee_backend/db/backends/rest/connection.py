@@ -372,6 +372,7 @@ class AttachmentConnector(CachedConnector):
             'hostname': self.hostname, 'db_name': self.db_name, 'table_name': table_name, 'parent_id': parent_id,
             'pk': pk
         }
+
         return self.http_get(url)
 
 
