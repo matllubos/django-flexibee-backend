@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2014-09-08 15:10-0500\n"
+"POT-Creation-Date: 2015-01-09 13:48+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -23,42 +23,122 @@ msgstr ""
 msgid "DB name %s does not exists"
 msgstr "DB s názvem %s neexistuje"
 
-#: db/forms/__init__.py:34
-msgid "New attachment"
-msgstr "Nová příloha"
+#: forms/widgets.py:19
+msgid "Backup"
+msgstr "Záloha"
 
-#: db/forms/__init__.py:35
-msgid "Remove attachments"
-msgstr "Odstranit přílohy"
+#: is_core/forms/__init__.py:33
+msgid "Attachment"
+msgstr "Příloha"
 
-#: db/models/__init__.py:94
+#: is_core/forms/__init__.py:34
+msgid "Link"
+msgstr "Odkaz"
+
+#: is_core/forms/__init__.py:35
+msgid "Description"
+msgstr "Popis"
+
+#: is_core/generic_views/inlines/inline_form_views.py:99
+msgid "attachment"
+msgstr "Příloha"
+
+#: is_core/rest/data_processor.py:28
+msgid "Data must be object"
+msgstr "Vstupní data musí být typu object"
+
+#: is_core/rest/data_processor.py:44
+msgid "Object does not exist"
+msgstr "Objekt neexistuje"
+
+#: models/__init__.py:159
+msgid "File must be set for creation."
+msgstr "Soubor musí být nastaven"
+
+#: models/__init__.py:162
+msgid "Filename must be set"
+msgstr "Soubor musí být nastaven"
+
+#: models/__init__.py:205
 msgid "Not accept"
 msgstr "Neakceptovat"
 
-#: db/models/__init__.py:95
+#: models/__init__.py:206
 msgid "Ignore"
 msgstr "Ignorovat"
 
-#: db/models/__init__.py:96
+#: models/__init__.py:207
 msgid "Record"
 msgstr "Zaúčtovat"
 
-#: db/models/__init__.py:97
+#: models/__init__.py:208
 msgid "Partial payment"
 msgstr "Částečná platba"
 
-#: db/models/__init__.py:98
+#: models/__init__.py:209
 msgid "Partial payment or record"
 msgstr "Částečná platba nebo zaúčtovat"
 
-#: db/models/__init__.py:99
+#: models/__init__.py:210
 msgid "Partial payment or ignore"
 msgstr "Částečná platba nebo ignorovat"
 
-#: db/models/__init__.py:170
+#: models/__init__.py:268
+msgid "Relation without payment cannot be deleted."
+msgstr "Vazba bez platby nemůže být smazána."
+
+#: models/__init__.py:279
+msgid "Existing relation cannot be changed."
+msgstr "Existující vazba nemůže být změněna."
+
+#: models/__init__.py:283
+msgid "Remain is required."
+msgstr "Pole zbytek je povinné."
+
+#: models/__init__.py:285
+msgid "Invoice is required."
+msgstr "Faktura je povinná."
+
+#: models/__init__.py:287
+msgid "Payment is required."
+msgstr "Platba je povinná."
+
+#: models/__init__.py:324 models/__init__.py:330
+msgid "Detached"
+msgstr "Odpojeno"
+
+#: models/__init__.py:325
+msgid "Attached"
+msgstr "Aktivní"
+
+#: models/__init__.py:329
+msgid "Synchronized"
+msgstr "Synchronizováno"
+
+#: models/__init__.py:331
+msgid "Synchronization error"
+msgstr "Chyba synchronizace"
+
+#: models/__init__.py:332
+msgid "Synchronizing"
+msgstr "Probíhá synchronizace"
+
+#: models/__init__.py:335
 msgid "DB name"
 msgstr "Název databáze"
 
-#: db/models/__init__.py:187
-msgid "Attachments"
-msgstr "Přílohy"
+#: models/__init__.py:337
+msgid "Synchronization start"
+msgstr "Datum započetí synchronizace"
+
+#: models/__init__.py:339
+msgid "Last synchronization"
+msgstr "Poslední synchronizace"
+
+#: models/__init__.py:342 models/__init__.py:395
+msgid "Flexibee state"
+msgstr "Stav flexibee"
+
+#: models/__init__.py:345
+msgid "Flexibee backup"
+msgstr "Záloha flexibee"
