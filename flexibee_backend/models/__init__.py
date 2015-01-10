@@ -374,10 +374,10 @@ class Company(models.Model):
             self._exists = admin_connector.exists_company(self)
         return self._exists
 
-    def synchronize(self):
+    def synchronize(self, callback=None):
         self.flexibee_synchronization_start = timezone.now()
         self.save()
-        synchronize_company.delay(self.pk, backup=getattr(self, '_flexibee_backup', False))
+        synchronize_company.delay(self.pk, backup=getattr(self, '_flexibee_backup', False), callback=callback)
 
     @property
     def synchronization_state(self):

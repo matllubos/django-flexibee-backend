@@ -12,7 +12,7 @@ app.config_from_object('django.conf:settings')
 
 
 @app.task()
-def synchronize_company(company_pk, backup=False):
+def synchronize_company(company_pk, backup=False, callback=None):
     Company = get_model(*FLEXIBEE_COMPANY_MODEL.split('.', 1))
     company = Company._default_manager.get(pk=company_pk)
     if company.exists:
@@ -32,4 +32,11 @@ def synchronize_company(company_pk, backup=False):
                 admin_connector.backup_company(company, handler)
                 )
     company.save(synchronized=True)
+
+    if callback:
+        if not isinstance(callback, (list, tuple, set)):
+            callback = [callback]
+
+        for method in callback:
+            getattr(company, method)()
 
