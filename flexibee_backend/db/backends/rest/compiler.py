@@ -31,7 +31,7 @@ OPERATORS_MAP = {
     'lt': '<',
     'lte': '<=',
     'in': 'in',
-    'isnull': 'is null',
+    'isnull': lambda lookup_type, val: ('is', 'null') if val else ('is not', 'null'),
     'like': 'like',
     'icontains': 'like',
     'startswith': 'begins',
