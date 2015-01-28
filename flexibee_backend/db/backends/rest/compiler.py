@@ -321,7 +321,7 @@ class SQLDataCompiler(object):
         if db_type == 'IntegerField':
             return int(value)
         if db_type == 'DateField':
-            return parse(value.split('+')[0]).date()
+            return parse(value.split('+')[0].replace('Z', '')).date()
         if db_type == 'BooleanField':
             return value == 'true' and True or False
 
