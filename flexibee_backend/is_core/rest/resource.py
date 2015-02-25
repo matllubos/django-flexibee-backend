@@ -4,7 +4,6 @@ from django.http.response import Http404
 from piston.resource import BaseObjectResource
 
 from is_core.rest.resource import RestResource
-from is_core.site import get_model_core
 
 from flexibee_backend.models import Attachment, FlexibeeItem
 from flexibee_backend.is_core.forms import FlexibeeAttachmentForm
@@ -96,6 +95,8 @@ class FlexibeeItemResource(RestResource, BaseObjectResource):
         self._post_delete_obj(obj)
 
     def _rest_links(self, obj):
+        from is_core.site import get_model_core
+
         rest_links = {}
         kwargs = {'parent_group': get_model_core(obj.instance).menu_group, 'parent_pk': obj.instance.pk}
         for pattern in self.core.resource_patterns.values():

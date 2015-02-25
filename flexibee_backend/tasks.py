@@ -1,6 +1,5 @@
 from celery import Celery
 
-from django.db.models.loading import get_model
 from django.core.files.uploadhandler import TemporaryFileUploadHandler
 
 from flexibee_backend.config import FLEXIBEE_COMPANY_MODEL
@@ -13,6 +12,8 @@ app.config_from_object('django.conf:settings')
 
 @app.task()
 def synchronize_company(company_pk, backup=False, callback=None):
+    from django.db.models.loading import get_model
+
     Company = get_model(*FLEXIBEE_COMPANY_MODEL.split('.', 1))
     company = Company._default_manager.get(pk=company_pk)
     if company.exists:

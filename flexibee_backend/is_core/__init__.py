@@ -1,4 +1,3 @@
-from django.db.models.loading import get_model
 from django.utils.datastructures import SortedDict
 from django.db.transaction import get_connection
 from django.core.urlresolvers import reverse
@@ -55,7 +54,7 @@ class FlexibeeIsCore(UIRestModelISCore):
 
     def get_show_in_menu(self, request):
         try:
-            company = self.get_company(request)
+            self.get_company(request)
             return super(FlexibeeIsCore, self).get_show_in_menu(request)
         except Http404:
             return False
