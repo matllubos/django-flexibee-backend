@@ -8,7 +8,7 @@ from django.db.models.fields.related import ForeignKey, OneToOneField
 from django.db.models.fields import Field, CharField, FieldDoesNotExist
 from django.core.exceptions import ObjectDoesNotExist
 from django.http.response import HttpResponse
-from django.utils import timezone
+from django.utils import timezone, translation
 from django.core import exceptions
 
 from flexibee_backend.db.utils import get_connector, get_db_name, set_db_name
@@ -163,12 +163,19 @@ class RemoteFile(object):
         return '.'.join((self.instance.pk, self.field.type)) if self.instance else None
 
     @property
+    def language_code(self):
+        lang_code = translation.get_language()
+        if not lang_code in config.FLEXIBEE_PDF_REPORT_AVAILABLE_LANGUAGES:
+            lang_code = config.FLEXIBEE_PDF_REPORT_DEFAULT_LANGUAGE
+        return lang_code
+
+    @property
     def file_response(self):
         if not self.instance.pk:
             raise AttributeError('The object musth have set id.')
-
         connector = get_connector(ModelConnector, self.instance.flexibee_company.flexibee_db_name)
-        r = connector.get_response(self.instance._meta.db_table, self.instance.pk, self.field.type)
+        query_string = 'report-lang=%s' % self.language_code
+        r = connector.get_response(self.instance._meta.db_table, self.instance.pk, self.field.type, query_string)
         return HttpResponse(r.content, content_type=r.headers['content-type'])
 
 
