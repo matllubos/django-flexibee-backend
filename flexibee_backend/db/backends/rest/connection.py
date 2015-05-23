@@ -273,9 +273,9 @@ class ModelConnector(CachedConnector):
         else:
             raise FlexibeeResponseError(url, r, 'Model connector delete method error')
 
-    def get_response(self, table_name, id, type):
+    def get_response(self, table_name, id, type, query_string=''):
         self._check_settings(table_name)
-        return self.http_get(self._generate_url('/%s' % id, table_name, '', type))
+        return self.http_get(self._generate_url('/%s' % id, table_name, query_string, type))
 
 
 class AttachmentConnector(CachedConnector):

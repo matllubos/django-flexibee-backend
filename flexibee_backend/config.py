@@ -14,3 +14,7 @@ FLEXIBEE_CACHE_TIMEOUT = getattr(settings, 'FLEXIBEE_CACHE_TIMEOUT', 60 * 60 * 2
 
 if not FLEXIBEE_EXTERNAL_KEY_PREFIX:
     raise ImproperlyConfigured('FLEXIBEE_EXTERNAL_KEY_PREFIX must be set inside settings')
+
+FLEXIBEE_PDF_REPORT_AVAILABLE_LANGUAGES = getattr(settings, 'FLEXIBEE_PDF_REPORT_AVAILABLE_LANGUAGES',
+                                                  ('cs', 'sk', 'en', 'de'))
+FLEXIBEE_PDF_REPORT_DEFAULT_LANGUAGE = getattr(settings, 'FLEXIBEE_PDF_REPORT_DEFAULT_LANGUAGE', 'cs')
