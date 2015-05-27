@@ -164,10 +164,10 @@ class RemoteFile(object):
 
     @property
     def language_code(self):
-        lang_code = translation.get_language()
-        if not lang_code in config.FLEXIBEE_PDF_REPORT_AVAILABLE_LANGUAGES:
-            lang_code = config.FLEXIBEE_PDF_REPORT_DEFAULT_LANGUAGE
-        return lang_code
+        if self.field.language_code and self.field.language_code in config.FLEXIBEE_PDF_REPORT_AVAILABLE_LANGUAGES:
+            return self.field.language_code
+        else:
+            return config.FLEXIBEE_PDF_REPORT_DEFAULT_LANGUAGE
 
     @property
     def file_response(self):
@@ -279,9 +279,10 @@ class ItemsDescriptor(object):
 
 class RemoteFileField(SouthFieldMixin, Field):
 
-    def __init__(self, verbose_name=None, name=None, type=None, **kwargs):
+    def __init__(self, verbose_name=None, name=None, type=None, language_code=None, **kwargs):
         super(RemoteFileField, self).__init__(verbose_name=verbose_name, name=name, **kwargs)
         self.type = type
+        self.language_code = language_code
 
     def contribute_to_class(self, cls, name):
         super(RemoteFileField, self).contribute_to_class(cls, name)
