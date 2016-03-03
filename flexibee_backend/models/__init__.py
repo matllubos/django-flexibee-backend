@@ -242,6 +242,7 @@ class Relation(FlexibeeItem):
         elif self.instance._meta.db_table in ['faktura-vydana', 'faktura-prijata']:
             self._set_related_obj(data, 'b', 'payment')
         self.type = data['typVazbyK']
+        self.storno = data.get('storno') == 'true'
         self.pk = data['id']
         self.sum = decimal.Decimal(data['castka'])
         if 'castkaMen' in data:
