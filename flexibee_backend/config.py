@@ -7,6 +7,8 @@ from django.core.exceptions import ImproperlyConfigured
 TESTING = sys.argv[1:2] == ['test'] or sys.argv[1:2] == ['jenkins']
 
 FLEXIBEE_COMPANY_MODEL = getattr(settings, 'FLEXIBEE_COMPANY_MODEL', None)
+FLEXIBEE_RELOAD_TO_IF_COMPANY_DOES_NOT_EXISTS = getattr(settings, 'FLEXIBEE_RELOAD_IF_COMPANY_DOES_NOT_EXISTS', '/')
+
 FLEXIBEE_BACKEND_NAME = getattr(settings, 'FLEXIBEE_BACKEND_NAME', 'flexibee')
 FLEXIBEE_EXTERNAL_KEY_PREFIX = getattr(settings, 'FLEXIBEE_EXTERNAL_KEY_PREFIX', None)
 FLEXIBEE_ADMIN_CERTIFICATE = getattr(settings, 'FLEXIBEE_ADMIN_CERTIFICATE', None)

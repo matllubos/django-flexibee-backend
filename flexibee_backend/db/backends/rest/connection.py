@@ -1,3 +1,4 @@
+import re
 import requests
 import json
 import logging
@@ -7,8 +8,10 @@ from django.db.utils import DatabaseError
 from django.utils.encoding import force_text
 from django.utils.http import urlquote
 
+from flexibee_backend.config import FLEXIBEE_COMPANY_MODEL
 from flexibee_backend.db.backends.rest.exceptions import (
-    ChangesNotActivatedFlexibeeResponseError, FlexibeeResponseError, FlexibeeDatabaseError
+    ChangesNotActivatedFlexibeeResponseError, FlexibeeResponseError, FlexibeeDatabaseError,
+    CompanyDoesNotExistsFlexibeeResponseError
 )
 from flexibee_backend.db.backends.rest.filters import ElementaryFilter
 from flexibee_backend.db.backends.rest.cache import ResponseCache, ModelCacheKeysGenerator, ItemCacheKeysGenerator
@@ -88,6 +91,11 @@ class DatabaseBaseConnector(BaseConnector):
 
     def reset(self):
         self.db_name = None
+
+    def _get_company(self):
+        from django.db.models.loading import get_model
+
+        return get_model(*FLEXIBEE_COMPANY_MODEL.split('.', 1)).objects.get(flexibee_db_name=self.db_name)
 
 
 class CachedConnector(DatabaseBaseConnector):
@@ -192,6 +200,19 @@ class ModelConnector(CachedConnector):
 
         return '&'.join(['%s=%s' % (key, val) for key, val in query_string_list])
 
+    def _get_exception(self, response, url, message):
+        if response.status_code == 404:
+            company = self._get_company()
+            flexibee_last_synchronization_before = company.flexibee_last_synchronization
+            flexibee_last_synchronization_after = company.check_if_company_exists()
+
+            if not flexibee_last_synchronization_after:
+                return CompanyDoesNotExistsFlexibeeResponseError(
+                    url, response, message, flexibee_last_synchronization_before != flexibee_last_synchronization_after
+                )
+
+        return FlexibeeResponseError(url, response, message)
+
     def read(self, table_name, filters, fields, relations, ordering, offset, base, store_via_table_name):
         self._check_settings(table_name)
 
@@ -206,13 +227,13 @@ class ModelConnector(CachedConnector):
         )
         r = self.http_get(url)
 
-        if r.status_code in [200, 201] :
+        if r.status_code in [200, 201]:
             return self._add_to_cache(
                 self._deserialize(url, r, table_name), table_name, filters, fields, relations, ordering, offset, base,
                 store_via_table_name
             )
         else:
-            raise FlexibeeResponseError(url, r, 'Model connector read method error')
+            raise self._get_exception(r, url, 'Model connector read method error')
 
     def count(self, table_name, filters, ordering, store_via_table_name):
         self._check_settings(table_name)
@@ -239,7 +260,7 @@ class ModelConnector(CachedConnector):
                 offset, base, store_via_table_name, 'count'
             )
         else:
-            raise FlexibeeResponseError(url, r, 'Model connector count method error')
+            raise self._get_exception(r, url, 'Model connector count method error')
 
     def write(self, table_name, data):
         self._check_settings(table_name)
@@ -254,7 +275,7 @@ class ModelConnector(CachedConnector):
             self._clear_table_cache(table_name)
             return self._deserialize(url, r, 'results')
         else:
-            raise FlexibeeResponseError(url, r, 'Model connector write method error')
+            raise self._get_exception(r, url, 'Model connector write method error')
 
     def delete(self, table_name, filters):
         self._check_settings(table_name)
@@ -271,7 +292,7 @@ class ModelConnector(CachedConnector):
             self._clear_table_cache(table_name)
             return self._deserialize(url, r, 'results')
         else:
-            raise FlexibeeResponseError(url, r, 'Model connector delete method error')
+            raise self._get_exception(r, url, 'Model connector delete method error')
 
     def get_response(self, table_name, id, type, query_string=''):
         self._check_settings(table_name)

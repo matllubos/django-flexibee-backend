@@ -105,8 +105,7 @@ class FlexibeeAdminConnector(BaseConnector):
     def _upload_files(self, company):
         for field_name, flexibee_file_name in zip(
                 (company._flexibee_meta.logo_field, company._flexibee_meta.signature_field),
-                ('logo', 'podpis-razitko')
-            ):
+                ('logo', 'podpis-razitko')):
             if field_name and getattr(company, field_name):
                 self._upload_file(company, flexibee_file_name, getattr(company, field_name))
 
