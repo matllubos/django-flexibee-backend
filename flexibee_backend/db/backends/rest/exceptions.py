@@ -20,7 +20,7 @@ class FlexibeeDatabaseError(DatabaseError):
         )
 
 
-class FlexibeeResponseError(FlexibeeDatabaseError):
+class FlexibeeResponseError(Exception):
 
     def __init__(self, url, resp, message=None):
         super(FlexibeeResponseError, self).__init__(message)
@@ -64,3 +64,10 @@ class ChangesNotActivatedFlexibeeResponseError(FlexibeeResponseError):
 
     def __init__(self, url, resp):
         super(ChangesNotActivatedFlexibeeResponseError, self).__init__(url, resp, 'Changes is not activated')
+
+
+class CompanyDoesNotExistsFlexibeeResponseError(FlexibeeResponseError):
+
+    def __init__(self, url, resp, message, can_reload):
+        super(CompanyDoesNotExistsFlexibeeResponseError, self).__init__(url, resp, message)
+        self.can_reload = can_reload

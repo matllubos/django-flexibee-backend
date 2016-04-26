@@ -10,6 +10,7 @@ from django.template.defaultfilters import slugify
 from django.utils.translation import ugettext_lazy as _
 from django.db.models.base import ModelBase
 from django.utils.functional import SimpleLazyObject
+from django.utils.functional import cached_property
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import InMemoryUploadedFile
 
@@ -334,7 +335,7 @@ class Company(models.Model):
     )
 
     flexibee_db_name = CharNullField(verbose_name=_('DB name'), null=True, blank=True, max_length=100, unique=True,
-                                        validators=[db_name_validator])
+                                     validators=[db_name_validator])
     flexibee_synchronization_start = models.DateTimeField(verbose_name=_('Synchronization start'), null=True, blank=True,
                                                          editable=False)
     flexibee_last_synchronization = models.DateTimeField(verbose_name=_('Last synchronization'), null=True, blank=True,
@@ -345,13 +346,9 @@ class Company(models.Model):
     )
     flexibee_backup = BackupFileField(verbose_name=_('Flexibee backup'), null=True, blank=True,
                                       upload_to='flexibee/backup')
-
+    flexibee_last_check_exists = models.BooleanField(verbose_name=_('Flexibee last check exists'), default=False)
 
     _flexibee_meta = OptionsLazy('_flexibee_meta', FlexibeeOptions)
-
-    def __init__(self, *args, **kwargs):
-        super(Company, self).__init__(*args, **kwargs)
-        self._exists = None
 
     def flexibee_create(self):
         admin_connector.create_company(self)
@@ -359,21 +356,16 @@ class Company(models.Model):
     def flexibee_update(self):
         admin_connector.update_company(self)
 
-    def save(self, synchronized=False, force_insert=False, force_update=False, using=None,
-             update_fields=None):
-        if synchronized:
-            self.flexibee_synchronization_start = None
-            self.flexibee_last_synchronization = timezone.now()
-            self.flexibee_state = self.FLEXIBEE_STATE.ATTACHED
-        else:
-            self.flexibee_state = self.FLEXIBEE_STATE.DETACHED
-        super(Company, self).save(force_insert, force_update, using, update_fields)
+    def check_if_company_exists(self):
+        self.flexibee_last_check_exists = admin_connector.exists_company(self)
+        super(Company, self).save()
+        return self.flexibee_last_check_exists
 
-    @property
+    @cached_property
     def exists(self):
-        if self._exists is None:
-            self._exists = admin_connector.exists_company(self)
-        return self._exists
+        if not self.flexibee_last_check_exists:
+            self.check_if_company_exists()
+        return self.flexibee_last_check_exists
 
     def synchronize(self, callback=None):
         self.flexibee_synchronization_start = timezone.now()
@@ -394,6 +386,16 @@ class Company(models.Model):
     def synchronization_state_display(self):
         return self.FLEXIBEE_SYNCHRONIZATION_STATE.get_label(self.synchronization_state)
     synchronization_state_display.short_description = _('Flexibee state')
+
+    def save(self, synchronized=False, force_insert=False, force_update=False, using=None,
+             update_fields=None):
+        if synchronized:
+            self.flexibee_synchronization_start = None
+            self.flexibee_last_synchronization = timezone.now()
+            self.flexibee_state = self.FLEXIBEE_STATE.ATTACHED
+        else:
+            self.flexibee_state = self.FLEXIBEE_STATE.DETACHED
+        super(Company, self).save(force_insert, force_update, using, update_fields)
 
     class Meta:
         abstract = True
