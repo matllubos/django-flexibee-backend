@@ -189,11 +189,14 @@ class RelationManager(ItemsManager):
 
 class Relation(FlexibeeItem):
     """
-    Relations among pokladni-pohyb,banka/faktura-vydana,faktura-prijata
+    Relations among pokladni-pohyb,banka/faktura-vydana,faktura-prijata,pohledavka,zavazek
     Relation work for both sides:
-        pokladni-pohyb,banka => faktura-vydana,faktura-prijata
-        faktura-vydana,faktura-prijata => pokladni-pohyb,banka
+        pokladni-pohyb,banka => faktura-vydana,faktura-prijata,pohledavka,zavazek
+        faktura-vydana,faktura-prijata,pohledavka,zavazek => pokladni-pohyb,banka
     """
+
+    DOCUMENT_TABLE_NAMES = ('faktura-vydana', 'faktura-prijata', 'pohledavka', 'zavazek')
+    MONEY_TABLE_NAMES = ('pokladni-pohyb', 'banka')
 
     REMAIN_IGNORE = 'ignorovat'
     REMAIN_NOT_ACCEPT = 'ne'
@@ -222,9 +225,9 @@ class Relation(FlexibeeItem):
 
     def __init__(self, instance, connector, data=None, **kwargs):
         super(Relation, self).__init__(instance, connector, data, **kwargs)
-        if self.instance._meta.db_table in ['pokladni-pohyb', 'banka']:
+        if self.instance._meta.db_table in self.MONEY_TABLE_NAMES:
             self._foreign_key_setter('payment', instance)
-        elif self.instance._meta.db_table in ['faktura-vydana', 'faktura-prijata']:
+        elif self.instance._meta.db_table in self.DOCUMENT_TABLE_NAMES:
             self._foreign_key_setter('invoice', instance)
 
     def _get_related_db_table(self, data, data_field_name):
@@ -238,9 +241,9 @@ class Relation(FlexibeeItem):
         return self._foreign_key_setter(field_name, related_model, self._get_related_pk(data, data_field_name))
 
     def _decode(self, data):
-        if self.instance._meta.db_table in ['pokladni-pohyb', 'banka']:
+        if self.instance._meta.db_table in self.MONEY_TABLE_NAMES:
             self._set_related_obj(data, 'a', 'invoice')
-        elif self.instance._meta.db_table in ['faktura-vydana', 'faktura-prijata']:
+        elif self.instance._meta.db_table in self.DOCUMENT_TABLE_NAMES:
             self._set_related_obj(data, 'b', 'payment')
         self.type = data['typVazbyK']
         self.storno = data.get('storno') == 'true'

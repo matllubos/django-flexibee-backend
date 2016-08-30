@@ -174,7 +174,8 @@ class RemoteFile(object):
         if not self.instance.pk:
             raise AttributeError('The object musth have set id.')
         connector = get_connector(ModelConnector, self.instance.flexibee_company.flexibee_db_name)
-        query_string = 'report-lang=%s' % self.language_code
+        query_params = {'report-lang': self.language_code, 'report-name': self.field.report_name}
+        query_string = '&'.join(['%s=%s' % (key, val) for key, val in query_params.items() if val])
         r = connector.get_response(self.instance._meta.db_table, self.instance.pk, self.field.type, query_string)
         return HttpResponse(r.content, content_type=r.headers['content-type'])
 
@@ -279,10 +280,11 @@ class ItemsDescriptor(object):
 
 class RemoteFileField(SouthFieldMixin, Field):
 
-    def __init__(self, verbose_name=None, name=None, type=None, language_code=None, **kwargs):
+    def __init__(self, verbose_name=None, name=None, type=None, language_code=None, report_name=None, **kwargs):
         super(RemoteFileField, self).__init__(verbose_name=verbose_name, name=name, **kwargs)
         self.type = type
         self.language_code = language_code
+        self.report_name = report_name
 
     def contribute_to_class(self, cls, name):
         super(RemoteFileField, self).contribute_to_class(cls, name)
